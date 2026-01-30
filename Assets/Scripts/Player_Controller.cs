@@ -61,7 +61,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float airAccelerationSmoothing = 0.08f;
 
     private bool wasGroundedPrev = true;
-    // Distancias ajustadas para evitar huecos y mejorar detecci贸n
+    // Distancias ajustadas para evitar huecos y mejorar detecci髇
     private float groundCheckDistance = 0.05f;
     private float wallCheckDistance = 0.05f;
 
@@ -97,7 +97,7 @@ public class PlayerController : MonoBehaviour
         if (Input.GetButtonDown("Jump"))
             jumpBufferTimer = jumpBufferTime;
 
-        // Dash (Mantenido en LeftShift seg煤n tu c贸digo original)
+        // Dash (Mantenido en LeftShift seg鷑 tu c骴igo original)
         if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing && canMove)
             StartCoroutine(Dash());
 
@@ -126,7 +126,7 @@ public class PlayerController : MonoBehaviour
         if (isDashing) return;
 
         // --- 1. SISTEMA DE GRAVEDAD PERSONALIZADA ---
-        // Esto soluciona la sensaci贸n de "flotar" sin romper el salto.
+        // Esto soluciona la sensaci髇 de "flotar" sin romper el salto.
         if (!CheckGrounded() && !isWallSliding)
         {
             float targetGravity = gravityNormal;
@@ -165,7 +165,7 @@ public class PlayerController : MonoBehaviour
             }
             else if (coyoteTimer > 0f)
             {
-                // F贸rmula de f铆sica corregida para usar la gravedad personalizada
+                // F髍mula de f韘ica corregida para usar la gravedad personalizada
                 float jumpingPower = useJumpVelocity
                     ? jumpVelocity
                     : Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y * gravityNormal) * jumpHeight);
@@ -196,7 +196,7 @@ public class PlayerController : MonoBehaviour
         {
             float targetVelocityX = horizontal * currentSpeed;
 
-            // --- 2. SOLUCI脫N WALL SLIDE: FUERZA ADHESIVA ---
+            // --- 2. SOLUCI覰 WALL SLIDE: FUERZA ADHESIVA ---
             if (isWallSliding)
             {
                 // Detectamos si el jugador empuja hacia la pared
@@ -204,8 +204,8 @@ public class PlayerController : MonoBehaviour
 
                 if (pushingIntoWall)
                 {
-                    // Aplicamos una fuerza m铆nima (0.5f) para mantener el contacto con el BoxCast
-                    // pero evitar la fricci贸n excesiva del motor de f铆sicas.
+                    // Aplicamos una fuerza m韓ima (0.5f) para mantener el contacto con el BoxCast
+                    // pero evitar la fricci髇 excesiva del motor de f韘icas.
                     float stickyForce = 0.5f;
                     targetVelocityX = isFacingRight ? stickyForce : -stickyForce;
                 }
@@ -234,10 +234,10 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            // Clamp de velocidad m谩xima de ca铆da
+            // Clamp de velocidad m醲ima de ca韉a
             float clampedY = Mathf.Clamp(rb.linearVelocity.y, maxFallSpeed, float.MaxValue);
 
-            // Solo aplicamos el clamp si estamos cayendo m谩s r谩pido que el l铆mite
+            // Solo aplicamos el clamp si estamos cayendo m醩 r醦ido que el l韒ite
             if (rb.linearVelocity.y < clampedY)
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, clampedY, 0f);
         }
@@ -306,7 +306,7 @@ public class PlayerController : MonoBehaviour
             0f
         ).normalized;
 
-        // Si no se pulsa nada, usa la direcci贸n en la que mira el jugador
+        // Si no se pulsa nada, usa la direcci髇 en la que mira el jugador
         if (dashDirection == Vector3.zero)
             dashDirection = isFacingRight ? Vector3.right : Vector3.left;
 

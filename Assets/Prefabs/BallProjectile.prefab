@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 5512597123182654282}
   - component: {fileID: 5673376898410537454}
   - component: {fileID: 4291013411341608942}
-  - component: {fileID: 7804650503770446270}
+  - component: {fileID: 885771014197867200}
   - component: {fileID: 1689692553448120379}
   m_Layer: 9
   m_Name: BallProjectile
@@ -110,7 +110,7 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &7804650503770446270
+--- !u!114 &885771014197867200
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -119,7 +119,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 3848380442627164912}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9512e996cd4a7b84bbecd679b045cb4c, type: 3}
+  m_Script: {fileID: 11500000, guid: 727c4c0071a4e094dbc56a0ac55db2ee, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   speed: 15
@@ -127,6 +127,9 @@ MonoBehaviour:
   speedMultiplierPerHit: 1.05
   damageMultiplierPerHit: 2
   homingSensitivity: 10
+  pogoTargetOffset: {x: 0, y: -2, z: 0}
+  pogoSeekPrecision: 1
+  maxContactTime: 0.2
 --- !u!54 &1689692553448120379
 Rigidbody:
   m_ObjectHideFlags: 0

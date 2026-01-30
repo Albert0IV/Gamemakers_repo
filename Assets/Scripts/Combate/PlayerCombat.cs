@@ -61,7 +61,7 @@ public class PlayerCombat : MonoBehaviour
 
         if (isHoldingPosition)
         {
-            
+
             // Bloqueamos el movimiento en el controller
             playerController.SetCanMove(false);
 
@@ -77,7 +77,7 @@ public class PlayerCombat : MonoBehaviour
         }
         else
         {
-            
+
             // Desbloqueamos el movimiento
             playerController.SetCanMove(true);
 
@@ -88,7 +88,7 @@ public class PlayerCombat : MonoBehaviour
             }
             else
             {
-          
+
                 float facingDir = playerController.IsFacingRight() ? 1 : -1;
                 aimDirection = new Vector2(facingDir, 0);
             }
@@ -115,7 +115,7 @@ public class PlayerCombat : MonoBehaviour
     {
         throwTimer = throwCooldown;
 
-        
+
         // Si apuntas hacia abajo , hace el pogo automáticamente
         if (aimDirection.y < -0.1f && Mathf.Abs(aimDirection.x) < 0.1f)
         {

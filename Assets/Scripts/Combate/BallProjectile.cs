@@ -60,7 +60,7 @@ public class BallProjectile : MonoBehaviour
         // Al hacer return aquí, dejamos que el Rigidbody actúe normal (gravedad),
 
         if (isStopped) return;
-      
+
 
         // retorno a debajo del jugador 
         if (isPogoSeeking && player != null)
@@ -97,7 +97,7 @@ public class BallProjectile : MonoBehaviour
         currentContactCollider = collision.collider;
         contactTimer = 0f;
 
-       
+
         if (isStopped && !collision.gameObject.CompareTag("Player")) return;
 
         // JUGADOR (Recogida)
@@ -142,14 +142,14 @@ public class BallProjectile : MonoBehaviour
     // Función para detener la bola
     private void StopBall()
     {
-        isStopped = true;           
-        isReturning = false;        
-        isPogoSeeking = false;      
+        isStopped = true;
+        isReturning = false;
+        isPogoSeeking = false;
 
-        rb.linearVelocity = Vector3.zero; 
+        rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        canHitPlayer = true;        
+        canHitPlayer = true;
     }
 
     public void GetHitByBat(Vector2 newDirection)

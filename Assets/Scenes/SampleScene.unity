@@ -11138,12 +11138,12 @@ GameObject:
   - component: {fileID: 1484419063}
   - component: {fileID: 1484419062}
   - component: {fileID: 1484419061}
+  - component: {fileID: 1484419070}
+  - component: {fileID: 1484419068}
   - component: {fileID: 1484419060}
   - component: {fileID: 1484419065}
   - component: {fileID: 1484419064}
-  - component: {fileID: 1484419066}
   - component: {fileID: 1484419067}
-  - component: {fileID: 1484419068}
   m_Layer: 7
   m_Name: Player
   m_TagString: Player
@@ -11292,18 +11292,6 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &1484419066
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1484419058}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 95e06cbb8602dd04ebe78adb945e67c5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!96 &1484419067
 TrailRenderer:
   serializedVersion: 3
@@ -11429,9 +11417,56 @@ MonoBehaviour:
   m_GameObject: {fileID: 1484419058}
   m_Enabled: 1
   m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f54dffda3da77374b9d51f33962da514, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speed: 12
+  useJumpVelocity: 0
+  jumpHeight: 5
+  jumpVelocity: 17
+  jumpCutMultiplier: 0.1
+  jumpBufferTime: 0.2
+  maxFallSpeed: -20
+  gravityNormal: 1.8
+  fallMultiplier: 1
+  coyoteTime: 0.2
+  enableDoubleJump: 0
+  doubleJumpVelocity: 12
+  dashForce: 25
+  dashDuration: 0.2
+  dashCooldown: 0.5
+  wallSlideSpeed: 2
+  enableWallJump: 1
+  wallJumpForce: {x: 12, y: 20}
+  rb: {fileID: 1484419064}
+  animator: {fileID: 1484419065}
+  playerCollider: {fileID: 1484419060}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  enableAirResistance: 0
+  airAccelerationSmoothing: 0.08
+--- !u!114 &1484419070
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1484419058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0e2421f2b2d328a41aebdfb563986b4b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  playerController: {fileID: 1484419068}
+  firePoint: {fileID: 1138575969}
+  ballPrefab: {fileID: 3848380442627164912, guid: ad162910fb0d81a45b44b5f4e741d89c, type: 3}
+  meleeHitboxPrefab: {fileID: 4368237516275563461, guid: a47ec553f2518f64b93308f404de7443, type: 3}
+  throwCooldown: 1.5
+  throwForce: 15
+  pogoForce: 18
+  meleeDuration: 0.2
+  meleeOffsetDistance: 1.5
 --- !u!1 &1502775952
 GameObject:
   m_ObjectHideFlags: 0

@@ -38,7 +38,7 @@ public class MeleeHitbox : MonoBehaviour
         if (other.CompareTag("Enemy"))
         {
             // por ahora nada
-            
+
         }
     }
 }
