@@ -30,7 +30,6 @@ public class BallProjectile : MonoBehaviour
     private bool canHitPlayer = false;
 
     private float lifeTimeTimer = 0f;
-
     private Collider currentContactCollider;
     private float contactTimer;
 
@@ -44,10 +43,7 @@ public class BallProjectile : MonoBehaviour
     private void Update()
     {
         lifeTimeTimer += Time.deltaTime;
-
-        // Si la bola está parada, seguro que queremos poder recogerla
         if (isStopped) canHitPlayer = true;
-
         if (lifeTimeTimer > 0.5f && !canHitPlayer && !isReturning && !isPogoSeeking)
         {
             canHitPlayer = true;
@@ -56,39 +52,28 @@ public class BallProjectile : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Si esta detenida, no hacemos nada más
-        // Al hacer return aquí, dejamos que el Rigidbody actúe normal (gravedad),
-
         if (isStopped) return;
 
-
-        // retorno a debajo del jugador 
         if (isPogoSeeking && player != null)
         {
             Vector3 targetPos = player.transform.position + pogoTargetOffset;
             Vector3 directionToTarget = (targetPos - transform.position).normalized;
-
             rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, directionToTarget * speed, Time.fixedDeltaTime * homingSensitivity);
-
             if (Vector3.Distance(transform.position, targetPos) < pogoSeekPrecision)
             {
                 isPogoSeeking = false;
                 isReturning = true;
             }
         }
-        // retorno al jugador
         else if (isReturning && player != null)
         {
             Vector3 directionToPlayer = (player.transform.position - transform.position).normalized;
             rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, directionToPlayer * speed, Time.fixedDeltaTime * homingSensitivity);
         }
-        // movimiento constante
         else
         {
             rb.linearVelocity = rb.linearVelocity.normalized * speed;
         }
-
-        // Bloquear Z
         transform.position = new Vector3(transform.position.x, transform.position.y, 0);
     }
 
@@ -97,36 +82,35 @@ public class BallProjectile : MonoBehaviour
         currentContactCollider = collision.collider;
         contactTimer = 0f;
 
-
         if (isStopped && !collision.gameObject.CompareTag("Player")) return;
 
-        // JUGADOR (Recogida)
         if (collision.gameObject.CompareTag("Player"))
         {
-            if (canHitPlayer)
-            {
-                Destroy(gameObject);
-            }
+            if (canHitPlayer) Destroy(gameObject);
             return;
         }
 
-        // REBOTE NORMAL
+        // IMPACTO CON ENEMIGO: DAÑO + REBOTE
+        if (collision.gameObject.CompareTag("Enemy"))
+        {
+            GroundEnemy enemy = collision.gameObject.GetComponent<GroundEnemy>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage(damage);
+            }
+            // No hacemos return, permitimos que BounceLogic se ejecute
+        }
+
         BounceLogic(collision.contacts[0].normal);
     }
 
     private void OnCollisionStay(Collision collision)
     {
-        // Si ya está parada, no necesitamos comprobar nada más
         if (isStopped) return;
-
         if (collision.collider == currentContactCollider)
         {
             contactTimer += Time.fixedDeltaTime;
-
-            if (contactTimer > maxContactTime)
-            {
-                StopBall();
-            }
+            if (contactTimer > maxContactTime) StopBall();
         }
     }
 
@@ -139,65 +123,51 @@ public class BallProjectile : MonoBehaviour
         }
     }
 
-    // Función para detener la bola
     private void StopBall()
     {
         isStopped = true;
         isReturning = false;
         isPogoSeeking = false;
-
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
-
         canHitPlayer = true;
     }
 
     public void GetHitByBat(Vector2 newDirection)
     {
-        isStopped = false; // volver a permitir movimiento
-        // Aumentar stats
+        isStopped = false;
         speed *= speedMultiplierPerHit;
         damage *= damageMultiplierPerHit;
-        // Resetear estado
         bounces = 0;
         canHitPlayer = false;
         lifeTimeTimer = 0f;
-        // Limpiar lógica anterior
         isReturning = false;
         isPogoSeeking = false;
         currentContactCollider = null;
         contactTimer = 0f;
-        // Detectar intención Pogo (Golpe hacia abajo)
-        if (newDirection.y < -0.1f)
-        {
-            wasPogoHit = true;
-        }
-        else
-        {
-            wasPogoHit = false;
-        }
-        // Aplicar disparo físico
+
+        if (newDirection.y < -0.1f) wasPogoHit = true;
+        else wasPogoHit = false;
+
         rb.linearVelocity = newDirection.normalized * speed;
     }
 
     private void BounceLogic(Vector3 normal)
     {
         bounces++;
-        canHitPlayer = true;  // Permitir recogida
-
+        canHitPlayer = true;
         rb.linearVelocity = Vector3.Reflect(rb.linearVelocity, normal);
 
         if (bounces >= 1)
         {
-            // Decidir comportamiento de vuelta
             if (wasPogoHit)
             {
-                isPogoSeeking = true; // Ruta Pogo (ir abajo)
+                isPogoSeeking = true;
                 wasPogoHit = false;
             }
             else
             {
-                isReturning = true; // Vuelta directa
+                isReturning = true;
             }
         }
     }

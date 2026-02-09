@@ -4,41 +4,44 @@ public class MeleeHitbox : MonoBehaviour
 {
     private Vector2 strikeDirection;
     private PlayerCombat player;
+    private int batDamage = 20; // Daño base del bate
 
     public void Setup(Vector2 dir, PlayerCombat playerRef)
     {
         strikeDirection = dir;
         player = playerRef;
-
-        // Rotar el hitbox visualmente para que coincida con el golpe 
         float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
         transform.rotation = Quaternion.Euler(0, 0, angle);
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        // Si golpeamos la bola
+        // GOLPEAR BOLA
         if (other.CompareTag("Ball"))
         {
             BallProjectile ball = other.GetComponent<BallProjectile>();
             if (ball != null)
             {
-                // redirige bola 
                 ball.GetHitByBat(strikeDirection);
-
-                // Si golpeamos hacia abajo (Pogo)
-                if (strikeDirection.y < -0.1f)
-                {
-                    player.DoPogo();
-                }
+                if (strikeDirection.y < -0.1f) player.DoPogo();
             }
         }
 
-        // Si golpeamos Enemigo
+        // GOLPEAR ENEMIGO
         if (other.CompareTag("Enemy"))
         {
-            // por ahora nada
+            GroundEnemy enemy = other.GetComponent<GroundEnemy>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage(batDamage);
 
+                // Empujón simple
+                Rigidbody enemyRb = enemy.GetComponent<Rigidbody>();
+                if (enemyRb != null)
+                {
+                    enemyRb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
+                }
+            }
         }
     }
 }

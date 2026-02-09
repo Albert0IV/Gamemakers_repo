@@ -1,47 +1,55 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement; // IMPORTANTE: Necesario para reiniciar la escena
+
 public class PlayerHealth : MonoBehaviour
 {
-    [Header("vidas")] //titulo para agrupar variables de vida
-    [SerializeField] private int maxLives = 3; //cantidad maxima de vidas
-    private int currentLives; //vidas actuales
+    [Header("vidas")]
+    [SerializeField] private int maxLives = 3;
+    private int currentLives;
 
-    [Header("ui de vidas")] //titulo para agrupar elementos visuales
-    [SerializeField] private GameObject lifeIconPrefab; //prefab del icono de vida
-    [SerializeField] private Transform lifePanel; //panel donde se colocan los iconos
-    private List<GameObject> lifeIcons = new List<GameObject>(); //lista de iconos en pantalla
+    [Header("ui de vidas")]
+    [SerializeField] private GameObject lifeIconPrefab;
+    [SerializeField] private Transform lifePanel;
+    private List<GameObject> lifeIcons = new List<GameObject>();
 
     void Start()
     {
-        currentLives = maxLives; //inicia con vidas completas
-        UpdateLivesUI(); //actualiza la interfaz de vidas
+        currentLives = maxLives;
+        UpdateLivesUI();
     }
 
-    public void TakeDamage(int damageAmount) //metodo para recibir daño
+    public void TakeDamage(int damageAmount)
     {
-        currentLives -= damageAmount; //resta vidas
-        currentLives = Mathf.Max(currentLives, 0); //evita que sea menor a cero
-        UpdateLivesUI(); //actualiza la interfaz
+        currentLives -= damageAmount;
+        currentLives = Mathf.Max(currentLives, 0);
+        UpdateLivesUI();
 
-        if (currentLives <= 0) //si se queda sin vidas
+        if (currentLives <= 0)
         {
-            currentLives = maxLives; //reinicia vidas
-            UpdateLivesUI(); //actualiza interfaz
+            // En lugar de reiniciar las variables, recargamos la escena completa
+            RestartScene();
         }
     }
 
-    private void UpdateLivesUI() //actualiza los iconos visuales
+    private void UpdateLivesUI()
     {
-        foreach (Transform child in lifePanel) //elimina iconos anteriores
+        foreach (Transform child in lifePanel)
         {
             Destroy(child.gameObject);
         }
 
-        for (int i = 0; i < currentLives; i++) //crea nuevos iconos segun vidas
+        for (int i = 0; i < currentLives; i++)
         {
             Instantiate(lifeIconPrefab, lifePanel);
         }
     }
 
+    // Nueva función para reiniciar la escena
+    private void RestartScene()
+    {
+        // Obtiene la escena activa actual y la vuelve a cargar
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
 }
