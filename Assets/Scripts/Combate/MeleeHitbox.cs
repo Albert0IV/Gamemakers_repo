@@ -33,7 +33,7 @@ public class MeleeHitbox : MonoBehaviour
             GroundEnemy enemy = other.GetComponent<GroundEnemy>();
             if (enemy != null)
             {
-                enemy.TakeDamage(batDamage);
+                enemy.TakeDamage(batDamage, transform.position);
                 Rigidbody enemyRb = enemy.GetComponent<Rigidbody>();
                 if (enemyRb != null) enemyRb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
             }

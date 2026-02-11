@@ -92,7 +92,7 @@ public class BallProjectile : MonoBehaviour
         if (collision.gameObject.CompareTag("Enemy"))
         {
             GroundEnemy enemy = collision.gameObject.GetComponent<GroundEnemy>();
-            if (enemy != null) enemy.TakeDamage(damage);
+            if (enemy != null) enemy.TakeDamage(damage, transform.position);
         }
 
         // IMPACTO CON OBJETO ROMPIBLE (Usa el daño actual de la bola)

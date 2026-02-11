@@ -8,13 +8,27 @@ public class GroundEnemy : MonoBehaviour
     [SerializeField] private float moveSpeed = 3f;
     [SerializeField] private float chaseSpeed = 5f;
 
-    [Header("Daño por Contacto (Cuerpo)")]
+    [Header("Ajustes de Knockback (Recibir Daño)")]
+    [Tooltip("Fuerza base que multiplica a los ratios.")]
+    [SerializeField] private float knockbackForce = 12f;
+    [Tooltip("Multiplicador horizontal. Úsalo alto para que el enemigo sea desplazado lateralmente.")]
+    [SerializeField] private float horizontalKnockbackRatio = 3.0f;
+    [Tooltip("Multiplicador vertical. Bajo (0.3 - 0.5) para que no vuele demasiado.")]
+    [SerializeField] private float upwardKnockbackRatio = 0.4f;
+
+    [Header("Feedback Visual")]
+    [SerializeField] private Renderer enemyRenderer;
+    [SerializeField] private float flashDuration = 0.2f;
+    [SerializeField] private GameObject attackVisual; // Objeto que representa el slash
+    [SerializeField] private float visualAttackDuration = 0.15f;
+
+    [Header("Daño por Contacto")]
     [SerializeField] private int bodyDamage = 1;
 
     [Header("Ataque Activo (Melee)")]
     [SerializeField] private int attackDamage = 2;
     [SerializeField] private float attackRange = 1.5f;
-    [SerializeField] private float attackWindup = 0.5f; // Tiempo antes del golpe
+    [SerializeField] private float attackWindup = 0.5f;
     [SerializeField] private float attackCooldown = 1.5f;
     [SerializeField] private Transform attackPoint;
     [SerializeField] private float attackRadius = 0.8f;
@@ -31,7 +45,6 @@ public class GroundEnemy : MonoBehaviour
     private Transform playerTransform;
     private Rigidbody rb;
 
-    // Estados
     private bool isChasing = false;
     private bool canAttack = true;
     private bool isAttacking = false;
@@ -42,19 +55,19 @@ public class GroundEnemy : MonoBehaviour
         currentHealth = maxHealth;
         startPos = transform.position;
 
-        // Buscamos al jugador por etiqueta
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
-        {
-            playerTransform = playerObj.transform;
-        }
+        // Buscamos al jugador de forma robusta por su script principal
+        PlayerController pc = Object.FindFirstObjectByType<PlayerController>();
+        if (pc != null) playerTransform = pc.transform;
 
         if (attackPoint == null) attackPoint = transform;
+        if (enemyRenderer == null) enemyRenderer = GetComponentInChildren<Renderer>();
+
+        // Aseguramos que el visual esté apagado al inicio
+        if (attackVisual != null) attackVisual.SetActive(false);
     }
 
     void FixedUpdate()
     {
-        // 1. Si estamos atacando, nos quedamos quietos
         if (isAttacking)
         {
             rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0);
@@ -65,81 +78,100 @@ public class GroundEnemy : MonoBehaviour
 
         float distToPlayer = Vector3.Distance(transform.position, playerTransform.position);
 
-        // 2. LÓGICA DE ATAQUE
         if (distToPlayer <= attackRange && canAttack)
         {
             StartCoroutine(PerformSlashAttack());
-            return; // Salimos para no movernos mientras iniciamos el ataque
+            return;
         }
 
-        // 3. LÓGICA DE DETECCIÓN
-        if (distToPlayer < detectionRange)
-        {
-            isChasing = true;
-        }
-        else if (distToPlayer > detectionRange * 1.5f) // Hysteresis (margen para dejar de perseguir)
-        {
-            isChasing = false;
-        }
+        if (distToPlayer < detectionRange) isChasing = true;
+        else if (distToPlayer > detectionRange * 1.5f) isChasing = false;
 
-        // 4. MOVIMIENTO
-        if (isChasing)
+        if (isChasing) ChaseLogic();
+        else PatrolLogic();
+    }
+
+    // --- SISTEMA DE DAÑO Y KNOCKBACK ---
+    public void TakeDamage(int damage, Vector3 attackerPos)
+    {
+        currentHealth -= damage;
+
+        // Dirección basada SIEMPRE en la posición del jugador respecto al enemigo
+        ApplyKnockbackFromPlayer();
+
+        StartCoroutine(FlashRed());
+
+        if (currentHealth <= 0) Die();
+    }
+
+    private void ApplyKnockbackFromPlayer()
+    {
+        if (rb == null || playerTransform == null) return;
+
+        rb.linearVelocity = Vector3.zero;
+
+        // Si el enemigo está a la derecha del jugador (x mayor), se va a la derecha (1)
+        float forceDirectionX = (transform.position.x >= playerTransform.position.x) ? 1f : -1f;
+
+        Vector3 forceVector = new Vector3(
+            forceDirectionX * horizontalKnockbackRatio * knockbackForce,
+            upwardKnockbackRatio * knockbackForce,
+            0f
+        );
+
+        rb.AddForce(forceVector, ForceMode.VelocityChange);
+    }
+
+    private IEnumerator FlashRed()
+    {
+        if (enemyRenderer)
         {
-            ChaseLogic();
-        }
-        else
-        {
-            PatrolLogic();
+            enemyRenderer.material.color = Color.red;
+            yield return new WaitForSeconds(flashDuration);
+            enemyRenderer.material.color = Color.white;
         }
     }
 
+    // --- LÓGICA DE ATAQUE CON INDICADOR VISUAL ---
     private IEnumerator PerformSlashAttack()
     {
         isAttacking = true;
         canAttack = false;
-
-        // Frenar en seco para atacar
         rb.linearVelocity = Vector3.zero;
 
-        // Mirar al jugador antes de golpear
         FacePlayer();
 
-        // Esperar tiempo de preparación (animación de levantar arma)
+        // Tiempo de "carga" o preparación
         yield return new WaitForSeconds(attackWindup);
 
-        // DETECTAR GOLPE
-        // Creamos un círculo invisible en el attackPoint
-        Collider[] hitPlayers = Physics.OverlapSphere(attackPoint.position, attackRadius, playerLayer);
+        // ACTIVAR INDICADOR Y APLICAR DAÑO
+        if (attackVisual != null) attackVisual.SetActive(true);
 
+        Collider[] hitPlayers = Physics.OverlapSphere(attackPoint.position, attackRadius, playerLayer);
         foreach (Collider player in hitPlayers)
         {
             PlayerHealth health = player.GetComponent<PlayerHealth>();
-            if (health != null)
-            {
-                // ¡IMPORTANTE! Pasamos 'transform.position' para que el jugador sepa desde dónde le pegaron
-                // y pueda calcular el empuje (Knockback) correctamente.
-                health.TakeDamage(attackDamage, transform.position);
-            }
+            if (health != null) health.TakeDamage(attackDamage, transform.position);
         }
 
-        // Esperar cooldown
-        yield return new WaitForSeconds(attackCooldown);
+        // El visual dura un breve instante
+        yield return new WaitForSeconds(visualAttackDuration);
+        if (attackVisual != null) attackVisual.SetActive(false);
+
+        // Esperar el resto del cooldown
+        yield return new WaitForSeconds(attackCooldown - visualAttackDuration);
 
         isAttacking = false;
         canAttack = true;
     }
 
-    // Usamos OnCollisionEnter en lugar de Stay para un golpe seco y rebote limpio
+    // --- LÓGICA DE MOVIMIENTO E IA ---
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Player"))
         {
             PlayerHealth hp = collision.gameObject.GetComponent<PlayerHealth>();
-            if (hp != null)
-            {
-                // Golpe por contacto físico
-                hp.TakeDamage(bodyDamage, transform.position);
-            }
+            if (hp != null) hp.TakeDamage(bodyDamage, transform.position);
         }
     }
 
@@ -148,7 +180,6 @@ public class GroundEnemy : MonoBehaviour
         float rightLimit = startPos.x + patrolDistance;
         float leftLimit = startPos.x - patrolDistance;
 
-        // Moverse
         if (facingRight)
         {
             rb.linearVelocity = new Vector3(moveSpeed, rb.linearVelocity.y, 0);
@@ -163,24 +194,16 @@ public class GroundEnemy : MonoBehaviour
 
     private void ChaseLogic()
     {
-        FacePlayer(); // Girar hacia el jugador
-
-        // Moverse hacia donde mira
+        FacePlayer();
         float dir = facingRight ? 1 : -1;
         rb.linearVelocity = new Vector3(dir * chaseSpeed, rb.linearVelocity.y, 0);
     }
 
     private void FacePlayer()
     {
-        // Solo girar si el jugador está claramente al otro lado
-        if (playerTransform.position.x < transform.position.x && facingRight)
-        {
-            Flip();
-        }
-        else if (playerTransform.position.x > transform.position.x && !facingRight)
-        {
-            Flip();
-        }
+        if (playerTransform == null) return;
+        if (playerTransform.position.x < transform.position.x && facingRight) Flip();
+        else if (playerTransform.position.x > transform.position.x && !facingRight) Flip();
     }
 
     private void Flip()
@@ -191,28 +214,13 @@ public class GroundEnemy : MonoBehaviour
         transform.localScale = localScale;
     }
 
-    // Esta función permite que el jugador mate al enemigo (opcional)
-    public void TakeDamage(int damage)
-    {
-        currentHealth -= damage;
-        // Animación de herido opcional aquí
-        if (currentHealth <= 0)
-        {
-            Destroy(gameObject);
-        }
-    }
+    private void Die() => Destroy(gameObject);
 
     private void OnDrawGizmosSelected()
     {
-        // Dibujos de ayuda en el editor
         Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, detectionRange); // Rango visión
-
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
         Gizmos.color = Color.red;
-        if (attackPoint != null)
-            Gizmos.DrawWireSphere(attackPoint.position, attackRadius); // Área de daño del ataque
-
-        Gizmos.color = Color.blue;
-        Gizmos.DrawLine(new Vector3(startPos.x - patrolDistance, startPos.y, startPos.z), new Vector3(startPos.x + patrolDistance, startPos.y, startPos.z)); // Patrulla
+        if (attackPoint != null) Gizmos.DrawWireSphere(attackPoint.position, attackRadius);
     }
 }
