@@ -4,7 +4,7 @@ public class MeleeHitbox : MonoBehaviour
 {
     private Vector2 strikeDirection;
     private PlayerCombat player;
-    private int batDamage = 20; // Daño base del bate
+    [SerializeField] private int batDamage = 20; // Daño estándar
 
     public void Setup(Vector2 dir, PlayerCombat playerRef)
     {
@@ -34,14 +34,19 @@ public class MeleeHitbox : MonoBehaviour
             if (enemy != null)
             {
                 enemy.TakeDamage(batDamage);
-
-                // Empujón simple
                 Rigidbody enemyRb = enemy.GetComponent<Rigidbody>();
-                if (enemyRb != null)
-                {
-                    enemyRb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
-                }
+                if (enemyRb != null) enemyRb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
             }
+        }
+
+        // GOLPEAR MURO (NUEVO: Pasa el daño normal)
+        BreakableObject breakable = other.GetComponent<BreakableObject>();
+        if (breakable != null)
+        {
+            breakable.HitObject(batDamage, player.transform);
+
+            // Si golpeamos hacia abajo contra un suelo rompible, hacemos pogo
+            if (strikeDirection.y < -0.1f) player.DoPogo();
         }
     }
 }

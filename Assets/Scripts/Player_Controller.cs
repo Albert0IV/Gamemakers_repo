@@ -3,15 +3,14 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    private float horizontal;
-    private bool isFacingRight = true;
-    private float jumpBufferTimer = 0f;
-
-    // Variable para bloquear movimiento al apuntar
-    private bool canMove = true;
+    // Hacemos esta variable visible en el inspector para que veas si funciona el Stun
+    [Header("Debug Estado")]
+    public bool canMove = true;
 
     [Header("Movimiento")]
     [SerializeField] private float speed = 8f;
+    private float horizontal;
+    private bool isFacingRight = true;
 
     [Header("Salto")]
     [SerializeField] private bool useJumpVelocity = false;
@@ -19,11 +18,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float jumpVelocity = 12f;
     [SerializeField] private float jumpCutMultiplier = 0.3f;
     [SerializeField] private float jumpBufferTime = 0.2f;
+    private float jumpBufferTimer = 0f;
 
     [Header("Caida & Gravedad")]
     [SerializeField] private float maxFallSpeed = -20f;
-    [SerializeField] private float gravityNormal = 3f; // Valor recomendado: 3
-    [SerializeField] private float fallMultiplier = 2f; // Valor recomendado: 2
+    [SerializeField] private float gravityNormal = 3f;
+    [SerializeField] private float fallMultiplier = 2f;
 
     [Header("Coyote Time")]
     [SerializeField] private float coyoteTime = 0.1f;
@@ -61,25 +61,21 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float airAccelerationSmoothing = 0.08f;
 
     private bool wasGroundedPrev = true;
-    // Distancias ajustadas para evitar huecos y mejorar detección
     private float groundCheckDistance = 0.05f;
     private float wallCheckDistance = 0.05f;
 
     private void Start()
     {
         if (playerCollider == null) playerCollider = GetComponent<Collider>();
+        if (rb == null) rb = GetComponent<Rigidbody>();
+
+        if (transform.localScale.x < 0) isFacingRight = false;
     }
 
     void Update()
     {
-        if (canMove)
-        {
-            horizontal = Input.GetAxisRaw("Horizontal");
-        }
-        else
-        {
-            horizontal = 0f;
-        }
+        // 1. GESTIÓN DE COOLDOWNS (Siempre corre, incluso aturdido)
+        if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
 
         bool isGroundedNow = CheckGrounded();
 
@@ -94,29 +90,38 @@ public class PlayerController : MonoBehaviour
             coyoteTimer -= Time.deltaTime;
         }
 
+        isTouchingWall = CheckWall();
+        isWallSliding = isTouchingWall && !isGroundedNow && rb.linearVelocity.y < 0.1f;
+
+        // ================================================================
+        // 2. BLOQUEO TOTAL DE INPUTS (STUN)
+        // Si canMove es false, NO leemos ni movimiento, ni salto, ni dash.
+        // ================================================================
+        if (!canMove)
+        {
+            horizontal = 0f;
+            // IMPORTANTE: Al hacer return aquí, impedimos que se procese el Salto o Dash abajo.
+            // Esto asegura que el jugador no pueda cancelar el aturdimiento saltando.
+            return;
+        }
+
+        // --- INPUTS DE MOVIMIENTO (Solo si canMove es true) ---
+
+        horizontal = Input.GetAxisRaw("Horizontal");
+
+        // Input Salto (Buffer)
         if (Input.GetButtonDown("Jump"))
             jumpBufferTimer = jumpBufferTime;
 
-        // Dash (Mantenido en LeftShift según tu código original)
-        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing && canMove)
+        // Input Dash
+        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing)
             StartCoroutine(Dash());
-
-        if (dashCooldownTimer > 0f)
-            dashCooldownTimer -= Time.deltaTime;
-
-        isTouchingWall = CheckWall();
-        isWallSliding = isTouchingWall && !isGroundedNow && rb.linearVelocity.y < 0.1f;
 
         // Salto variable (Jump Cut)
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier, 0f);
 
-        if (canMove) Flip();
-
-        //animator.SetBool("isWalking", Mathf.Abs(horizontal) > 0.1f && isGroundedNow);
-        //animator.SetBool("isJumping", !isGroundedNow);
-        //animator.SetBool("isDashing", isDashing);
-        //animator.SetBool("isWallSliding", isWallSliding);
+        Flip();
 
         wasGroundedPrev = isGroundedNow;
     }
@@ -125,27 +130,25 @@ public class PlayerController : MonoBehaviour
     {
         if (isDashing) return;
 
-        // --- 1. SISTEMA DE GRAVEDAD PERSONALIZADA ---
-        // Esto soluciona la sensación de "flotar" sin romper el salto.
+        // Gravedad Personalizada (Siempre activa para que caigas bien al recibir daño en el aire)
         if (!CheckGrounded() && !isWallSliding)
         {
             float targetGravity = gravityNormal;
-
-            // Si caemos, aumentamos la gravedad para dar peso
-            if (rb.linearVelocity.y < 0)
-            {
-                targetGravity *= fallMultiplier;
-            }
-
-            // Aplicamos la fuerza extra (Restamos 1 porque Unity ya tiene gravedad base)
+            if (rb.linearVelocity.y < 0) targetGravity *= fallMultiplier;
             Vector3 extraGravityForce = Physics.gravity * (targetGravity - 1f);
             rb.AddForce(extraGravityForce, ForceMode.Acceleration);
         }
-        // --------------------------------------------
+
+        // BLOQUEO DE FÍSICAS POR STUN
+        // Si no nos podemos mover, dejamos que la fuerza del golpe (Knockback) nos mueva.
+        // No ejecutamos el código de movimiento normal.
+        if (!canMove) return;
+
+        // --- LÓGICA DE MOVIMIENTO NORMAL ---
 
         float currentSpeed = speed;
 
-        // Salto
+        // Procesar Salto
         if (jumpBufferTimer > 0f)
         {
             bool performedAction = false;
@@ -154,22 +157,18 @@ public class PlayerController : MonoBehaviour
             {
                 isWallJumping = true;
                 Invoke(nameof(StopWallJump), wallJumpDuration);
-
                 float jumpDirection = isFacingRight ? -1f : 1f;
                 rb.linearVelocity = new Vector3(wallJumpForce.x * jumpDirection, wallJumpForce.y, 0f);
                 CheckFlipImmediate(jumpDirection);
-
                 jumpBufferTimer = 0f;
                 canDoubleJump = true;
                 performedAction = true;
             }
             else if (coyoteTimer > 0f)
             {
-                // Fórmula de física corregida para usar la gravedad personalizada
                 float jumpingPower = useJumpVelocity
                     ? jumpVelocity
                     : Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y * gravityNormal) * jumpHeight);
-
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpingPower, 0f);
                 performedAction = true;
             }
@@ -180,15 +179,8 @@ public class PlayerController : MonoBehaviour
                 performedAction = true;
             }
 
-            if (performedAction)
-            {
-                jumpBufferTimer = 0f;
-                coyoteTimer = 0f;
-            }
-            else
-            {
-                jumpBufferTimer -= Time.fixedDeltaTime;
-            }
+            if (performedAction) jumpBufferTimer = 0f; // Reset buffer
+            else jumpBufferTimer -= Time.fixedDeltaTime;
         }
 
         // Movimiento Horizontal
@@ -196,23 +188,12 @@ public class PlayerController : MonoBehaviour
         {
             float targetVelocityX = horizontal * currentSpeed;
 
-            // --- 2. SOLUCIÓN WALL SLIDE: FUERZA ADHESIVA ---
             if (isWallSliding)
             {
-                // Detectamos si el jugador empuja hacia la pared
                 bool pushingIntoWall = (isFacingRight && horizontal > 0) || (!isFacingRight && horizontal < 0);
-
-                if (pushingIntoWall)
-                {
-                    // Aplicamos una fuerza mínima (0.5f) para mantener el contacto con el BoxCast
-                    // pero evitar la fricción excesiva del motor de físicas.
-                    float stickyForce = 0.5f;
-                    targetVelocityX = isFacingRight ? stickyForce : -stickyForce;
-                }
+                if (pushingIntoWall) targetVelocityX = isFacingRight ? 0.5f : -0.5f;
             }
-            // -----------------------------------------------
 
-            // Aplicamos la velocidad calculada
             if (enableAirResistance && !CheckGrounded())
             {
                 float smoothedVelocityX = Mathf.Lerp(rb.linearVelocity.x, targetVelocityX, airAccelerationSmoothing);
@@ -224,20 +205,15 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // Wall Slide
+        // Limitadores de velocidad (Wall Slide & Max Fall)
         if (isWallSliding && !isWallJumping)
         {
             if (rb.linearVelocity.y < -wallSlideSpeed)
-            {
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, -wallSlideSpeed, 0f);
-            }
         }
         else
         {
-            // Clamp de velocidad máxima de caída
             float clampedY = Mathf.Clamp(rb.linearVelocity.y, maxFallSpeed, float.MaxValue);
-
-            // Solo aplicamos el clamp si estamos cayendo más rápido que el límite
             if (rb.linearVelocity.y < clampedY)
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, clampedY, 0f);
         }
@@ -250,12 +226,13 @@ public class PlayerController : MonoBehaviour
         transform.position = pos;
     }
 
+    // --- UTILITIES & CHECKS ---
+
     private bool CheckGrounded()
     {
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
-        Vector3 boxSize = new Vector3(size.x * 0.9f, 0.05f, size.z);
-        return Physics.BoxCast(center, boxSize / 2, Vector3.down, Quaternion.identity, (size.y / 2) + groundCheckDistance, groundLayer);
+        return Physics.BoxCast(center, new Vector3(size.x * 0.9f, 0.05f, size.z) / 2, Vector3.down, Quaternion.identity, (size.y / 2) + groundCheckDistance, groundLayer);
     }
 
     private bool CheckWall()
@@ -263,69 +240,56 @@ public class PlayerController : MonoBehaviour
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
         Vector3 direction = isFacingRight ? Vector3.right : Vector3.left;
-        Vector3 boxSize = new Vector3(0.05f, size.y * 0.8f, size.z);
-        return Physics.BoxCast(center, boxSize / 2, direction, Quaternion.identity, (size.x / 2) + wallCheckDistance, groundLayer);
+        return Physics.BoxCast(center, new Vector3(0.05f, size.y * 0.8f, size.z) / 2, direction, Quaternion.identity, (size.x / 2) + wallCheckDistance, groundLayer);
     }
+
+    // --- FLIP SYSTEM (Negative Scale) ---
 
     private void Flip()
     {
-        if (isWallJumping) return;
-
-        // Evitamos girar mientras deslizamos para no perder el contacto con la pared
-        if (isWallSliding) return;
-
-        if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f)
-        {
-            isFacingRight = !isFacingRight;
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1f;
-            transform.localScale = localScale;
-        }
+        if (isWallJumping || isWallSliding) return;
+        if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f) PerformFlip();
     }
 
     private void CheckFlipImmediate(float direction)
     {
-        if ((isFacingRight && direction < 0) || (!isFacingRight && direction > 0))
-        {
-            isFacingRight = !isFacingRight;
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1f;
-            transform.localScale = localScale;
-        }
+        if ((isFacingRight && direction < 0) || (!isFacingRight && direction > 0)) PerformFlip();
     }
+
+    private void PerformFlip()
+    {
+        isFacingRight = !isFacingRight;
+        Vector3 localScale = transform.localScale;
+        localScale.x *= -1f;
+        transform.localScale = localScale;
+    }
+
+    public void ManualFlip(float xInput)
+    {
+        if ((isFacingRight && xInput < 0) || (!isFacingRight && xInput > 0)) PerformFlip();
+    }
+
+    public bool IsFacingRight() => isFacingRight;
+
+    // --- DASH ---
 
     private IEnumerator Dash()
     {
         isDashing = true;
         rb.useGravity = false;
-
-        // Ignoramos input vertical (ponemos 0f en la Y)
-        Vector3 dashDirection = new Vector3(
-            Input.GetAxisRaw("Horizontal"),
-            0f,
-            0f
-        ).normalized;
-
-        // Si no se pulsa nada, usa la dirección en la que mira el jugador
-        if (dashDirection == Vector3.zero)
-            dashDirection = isFacingRight ? Vector3.right : Vector3.left;
-
+        Vector3 dashDirection = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, 0f).normalized;
+        if (dashDirection == Vector3.zero) dashDirection = isFacingRight ? Vector3.right : Vector3.left;
         rb.linearVelocity = dashDirection * dashForce;
-
         yield return new WaitForSeconds(dashDuration);
-
         rb.useGravity = true;
         isDashing = false;
         dashCooldownTimer = dashCooldown;
-
-        // Al terminar el dash, reseteamos la velocidad para que no quede inercia flotante
-        rb.linearVelocity = new Vector3(0f, 0f, 0f);
+        rb.linearVelocity = Vector3.zero;
     }
 
-    private void StopWallJump()
-    {
-        isWallJumping = false;
-    }
+    private void StopWallJump() => isWallJumping = false;
+
+    // --- PUBLIC METHODS FOR HEALTH SCRIPT ---
 
     public void SetCanMove(bool state)
     {
@@ -333,34 +297,21 @@ public class PlayerController : MonoBehaviour
 
         if (!canMove)
         {
+            // Solo reseteamos animaciones y variables lógicas.
+            // NO tocamos rb.linearVelocity aquí para no frenar el Knockback.
             horizontal = 0f;
-            animator.SetBool("isWalking", false);
-            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            jumpBufferTimer = 0f;
+            if (animator != null) animator.SetBool("isWalking", false);
         }
     }
-
-    public void ManualFlip(float xInput)
-    {
-        if ((isFacingRight && xInput < 0) || (!isFacingRight && xInput > 0))
-        {
-            isFacingRight = !isFacingRight;
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1f;
-            transform.localScale = localScale;
-        }
-    }
-
-    public bool IsFacingRight() => isFacingRight;
 
     private void OnDrawGizmos()
     {
         if (playerCollider == null) return;
-
         Gizmos.color = Color.red;
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
         Gizmos.DrawWireCube(center + Vector3.down * ((size.y / 2) + groundCheckDistance), new Vector3(size.x * 0.9f, 0.05f, size.z));
-
         Vector3 direction = isFacingRight ? Vector3.right : Vector3.left;
         Gizmos.DrawWireCube(center + direction * ((size.x / 2) + wallCheckDistance), new Vector3(0.05f, size.y * 0.8f, size.z));
     }

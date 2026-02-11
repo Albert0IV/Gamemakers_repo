@@ -5,17 +5,15 @@ public class BallProjectile : MonoBehaviour
     [Header("Stats Base")]
     [SerializeField] private float speed = 15f;
     [SerializeField] private int damage = 10;
+
+    [Header("Multiplicadores")]
     [SerializeField] private float speedMultiplierPerHit = 1.2f;
     [SerializeField] private int damageMultiplierPerHit = 2;
 
-    [Header("Comportamiento Homing")]
+    [Header("Comportamiento")]
     [SerializeField] private float homingSensitivity = 5f;
-
-    [Header("Comportamiento Pogo")]
     [SerializeField] private Vector3 pogoTargetOffset = new Vector3(0f, -2f, 0f);
     [SerializeField] private float pogoSeekPrecision = 1f;
-
-    [Header("Seguridad Anti-Atasco")]
     [SerializeField] private float maxContactTime = 0.2f;
 
     private Rigidbody rb;
@@ -90,15 +88,18 @@ public class BallProjectile : MonoBehaviour
             return;
         }
 
-        // IMPACTO CON ENEMIGO: DAÑO + REBOTE
+        // IMPACTO CON ENEMIGO
         if (collision.gameObject.CompareTag("Enemy"))
         {
             GroundEnemy enemy = collision.gameObject.GetComponent<GroundEnemy>();
-            if (enemy != null)
-            {
-                enemy.TakeDamage(damage);
-            }
-            // No hacemos return, permitimos que BounceLogic se ejecute
+            if (enemy != null) enemy.TakeDamage(damage);
+        }
+
+        // IMPACTO CON OBJETO ROMPIBLE (Usa el daño actual de la bola)
+        BreakableObject breakable = collision.gameObject.GetComponent<BreakableObject>();
+        if (breakable != null)
+        {
+            breakable.HitObject(damage, transform);
         }
 
         BounceLogic(collision.contacts[0].normal);
@@ -137,7 +138,7 @@ public class BallProjectile : MonoBehaviour
     {
         isStopped = false;
         speed *= speedMultiplierPerHit;
-        damage *= damageMultiplierPerHit;
+        damage *= damageMultiplierPerHit; // El daño aumenta
         bounces = 0;
         canHitPlayer = false;
         lifeTimeTimer = 0f;
