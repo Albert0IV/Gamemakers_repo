@@ -4,7 +4,7 @@ public class MeleeHitbox : MonoBehaviour
 {
     private Vector2 strikeDirection;
     private PlayerCombat player;
-    [SerializeField] private int batDamage = 20; // Daño estándar
+    [SerializeField] private int batDamage = 20; // Daño estándar del bate
 
     public void Setup(Vector2 dir, PlayerCombat playerRef)
     {
@@ -16,7 +16,7 @@ public class MeleeHitbox : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // GOLPEAR BOLA
+        // GOLPEAR BOLA (Caso especial por su lógica de dirección y pogo)
         if (other.CompareTag("Ball"))
         {
             BallProjectile ball = other.GetComponent<BallProjectile>();
@@ -24,29 +24,23 @@ public class MeleeHitbox : MonoBehaviour
             {
                 ball.GetHitByBat(strikeDirection);
                 if (strikeDirection.y < -0.1f) player.DoPogo();
+                return;
             }
         }
 
-        // GOLPEAR ENEMIGO
-        if (other.CompareTag("Enemy"))
+        // SISTEMA UNIVERSAL: Enemigos, Palancas, Objetos Rompibles
+        IDamageable damageable = other.GetComponent<IDamageable>();
+        if (damageable != null)
         {
-            GroundEnemy enemy = other.GetComponent<GroundEnemy>();
-            if (enemy != null)
-            {
-                enemy.TakeDamage(batDamage, transform.position);
-                Rigidbody enemyRb = enemy.GetComponent<Rigidbody>();
-                if (enemyRb != null) enemyRb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
-            }
-        }
+            // Aplicamos el daño del bate
+            damageable.TakeDamage(batDamage, player.transform.position);
 
-        // GOLPEAR MURO (NUEVO: Pasa el daño normal)
-        BreakableObject breakable = other.GetComponent<BreakableObject>();
-        if (breakable != null)
-        {
-            breakable.HitObject(batDamage, player.transform);
+            // Si golpeamos hacia abajo contra algo dañable, hacemos pogo
+            
 
-            // Si golpeamos hacia abajo contra un suelo rompible, hacemos pogo
-            if (strikeDirection.y < -0.1f) player.DoPogo();
+            // Si tiene físicas, aplicamos un empuje extra
+            Rigidbody rb = other.GetComponent<Rigidbody>();
+            if (rb != null) rb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
         }
     }
 }

@@ -20,7 +20,6 @@ public class BallProjectile : MonoBehaviour
     private PlayerCombat player;
     private int bounces = 0;
 
-    // ESTADOS
     private bool isReturning = false;
     private bool isPogoSeeking = false;
     private bool wasPogoHit = false;
@@ -88,18 +87,12 @@ public class BallProjectile : MonoBehaviour
             return;
         }
 
-        // IMPACTO CON ENEMIGO
-        if (collision.gameObject.CompareTag("Enemy"))
+        // IMPACTO UNIVERSAL CON IDAMAGEABLE
+        IDamageable damageable = collision.gameObject.GetComponent<IDamageable>();
+        if (damageable != null)
         {
-            GroundEnemy enemy = collision.gameObject.GetComponent<GroundEnemy>();
-            if (enemy != null) enemy.TakeDamage(damage, transform.position);
-        }
-
-        // IMPACTO CON OBJETO ROMPIBLE (Usa el daño actual de la bola)
-        BreakableObject breakable = collision.gameObject.GetComponent<BreakableObject>();
-        if (breakable != null)
-        {
-            breakable.HitObject(damage, transform);
+            // Pasamos el daño actual de la bola (que puede estar multiplicado)
+            damageable.TakeDamage(damage, transform.position);
         }
 
         BounceLogic(collision.contacts[0].normal);
@@ -138,7 +131,7 @@ public class BallProjectile : MonoBehaviour
     {
         isStopped = false;
         speed *= speedMultiplierPerHit;
-        damage *= damageMultiplierPerHit; // El daño aumenta
+        damage *= damageMultiplierPerHit;
         bounces = 0;
         canHitPlayer = false;
         lifeTimeTimer = 0f;
