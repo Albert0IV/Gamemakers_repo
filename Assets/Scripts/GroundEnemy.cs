@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
+// interfaz idamageable para que el enemigo reciba daño de forma estandar
 public class GroundEnemy : MonoBehaviour, IDamageable
 {
     [Header("Estadísticas Generales")]
@@ -46,6 +47,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
     private bool canAttack = true;
     private bool isAttacking = false;
 
+    // inicializa componentes y busca al jugador
     void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -59,7 +61,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         if (enemyRenderer == null) enemyRenderer = GetComponentInChildren<Renderer>();
         if (attackVisual != null) attackVisual.SetActive(false);
     }
-
+    // gestiona estados de movimiento y ataque en cada frame fisico
     void FixedUpdate()
     {
         if (isAttacking)
@@ -84,7 +86,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         if (isChasing) ChaseLogic();
         else PatrolLogic();
     }
-
+    // metodo de la interfaz para restar vida y aplicar efectos al ser golpeado
     public void TakeDamage(int damage, Vector3 attackerPos)
     {
         currentHealth -= damage;
@@ -92,7 +94,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         StartCoroutine(FlashRed());
         if (currentHealth <= 0) Die();
     }
-
+    // aplica fuerza fisica para empujar al enemigo lejos del jugador
     private void ApplyKnockbackFromPlayer()
     {
         if (rb == null || playerTransform == null) return;
@@ -101,7 +103,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         Vector3 forceVector = new Vector3(forceDirectionX * horizontalKnockbackRatio * knockbackForce, upwardKnockbackRatio * knockbackForce, 0f);
         rb.AddForce(forceVector, ForceMode.VelocityChange);
     }
-
+    // cambia el color del material temporalmente como feedback de daño
     private IEnumerator FlashRed()
     {
         if (enemyRenderer)
@@ -111,7 +113,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
             enemyRenderer.material.color = Color.white;
         }
     }
-
+    // secuencia de ataque melee: aviso, activacion de daño en area y enfriamiento
     private IEnumerator PerformSlashAttack()
     {
         isAttacking = true;
@@ -134,7 +136,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         isAttacking = false;
         canAttack = true;
     }
-
+    // detecta colision fisica para dañar al jugador por contacto
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Player"))
@@ -143,7 +145,7 @@ public class GroundEnemy : MonoBehaviour, IDamageable
             if (hp != null) hp.TakeDamage(bodyDamage, transform.position);
         }
     }
-
+    // mueve al enemigo de izquierda a derecha en un area fija
     private void PatrolLogic()
     {
         float rightLimit = startPos.x + patrolDistance;
@@ -159,21 +161,21 @@ public class GroundEnemy : MonoBehaviour, IDamageable
             if (transform.position.x <= leftLimit) Flip();
         }
     }
-
+    // mueve al enemigo directamente hacia el jugador
     private void ChaseLogic()
     {
         FacePlayer();
         float dir = facingRight ? 1 : -1;
         rb.linearVelocity = new Vector3(dir * chaseSpeed, rb.linearVelocity.y, 0);
     }
-
+    // orienta al enemigo segun la posicion del jugador
     private void FacePlayer()
     {
         if (playerTransform == null) return;
         if (playerTransform.position.x < transform.position.x && facingRight) Flip();
         else if (playerTransform.position.x > transform.position.x && !facingRight) Flip();
     }
-
+    // invierte la escala horizontal para girar visualmente al enemigo
     private void Flip()
     {
         facingRight = !facingRight;
@@ -181,9 +183,9 @@ public class GroundEnemy : MonoBehaviour, IDamageable
         localScale.x *= -1f;
         transform.localScale = localScale;
     }
-
+    // elimina el objeto de la escena al morir
     private void Die() => Destroy(gameObject);
-
+    // dibuja esferas en el editor para visualizar rangos de vision y ataque
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
