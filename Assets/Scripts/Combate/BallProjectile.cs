@@ -15,6 +15,7 @@ public class BallProjectile : MonoBehaviour
     [SerializeField] private Vector3 pogoTargetOffset = new Vector3(0f, -2f, 0f);
     [SerializeField] private float pogoSeekPrecision = 1f;
     [SerializeField] private float maxContactTime = 0.2f;
+    [SerializeField] private float idleLifeTime = 1.0f; // Tiempo para desaparecer
 
     private Rigidbody rb;
     private PlayerCombat player;
@@ -27,6 +28,7 @@ public class BallProjectile : MonoBehaviour
     private bool canHitPlayer = false;
 
     private float lifeTimeTimer = 0f;
+    private float stopTimer = 0f;
     private Collider currentContactCollider;
     private float contactTimer;
 
@@ -40,7 +42,22 @@ public class BallProjectile : MonoBehaviour
     private void Update()
     {
         lifeTimeTimer += Time.deltaTime;
-        if (isStopped) canHitPlayer = true;
+
+        // Lógica de autodestrucción
+        if (isStopped)
+        {
+            stopTimer += Time.deltaTime;
+            if (stopTimer >= idleLifeTime)
+            {
+                Destroy(gameObject);
+            }
+        }
+        else
+        {
+            stopTimer = 0f;
+        }
+
+        // Prevención de colisión inmediata con el jugador al aparecer
         if (lifeTimeTimer > 0.5f && !canHitPlayer && !isReturning && !isPogoSeeking)
         {
             canHitPlayer = true;
@@ -56,7 +73,8 @@ public class BallProjectile : MonoBehaviour
             Vector3 targetPos = player.transform.position + pogoTargetOffset;
             Vector3 directionToTarget = (targetPos - transform.position).normalized;
             rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, directionToTarget * speed, Time.fixedDeltaTime * homingSensitivity);
-            if (Vector3.Distance(transform.position, targetPos) < pogoSeekPrecision)
+
+            if (Vector2.Distance(transform.position, targetPos) < pogoSeekPrecision)
             {
                 isPogoSeeking = false;
                 isReturning = true;
@@ -69,8 +87,12 @@ public class BallProjectile : MonoBehaviour
         }
         else
         {
-            rb.linearVelocity = rb.linearVelocity.normalized * speed;
+            // Mantener velocidad constante si no está buscando al jugador
+            if (rb.linearVelocity.magnitude > 0)
+                rb.linearVelocity = rb.linearVelocity.normalized * speed;
         }
+
+        // Mantener el juego en 2D (Z = 0)
         transform.position = new Vector3(transform.position.x, transform.position.y, 0);
     }
 
@@ -83,15 +105,13 @@ public class BallProjectile : MonoBehaviour
 
         if (collision.gameObject.CompareTag("Player"))
         {
-            if (canHitPlayer) Destroy(gameObject);
+            if (canHitPlayer || isReturning) Destroy(gameObject);
             return;
         }
 
-        // IMPACTO UNIVERSAL CON IDAMAGEABLE
-        IDamageable damageable = collision.gameObject.GetComponent<IDamageable>();
-        if (damageable != null)
+        // Sistema de daño (asegúrate de que IDamageable exista)
+        if (collision.gameObject.TryGetComponent<IDamageable>(out IDamageable damageable))
         {
-            // Pasamos el daño actual de la bola (que puede estar multiplicado)
             damageable.TakeDamage(damage, transform.position);
         }
 
@@ -110,7 +130,7 @@ public class BallProjectile : MonoBehaviour
 
     private void OnCollisionExit(Collision collision)
     {
-        if (collision.collider == currentContactCollider)
+        if (currentContactCollider != null && collision.collider == currentContactCollider)
         {
             currentContactCollider = null;
             contactTimer = 0f;
@@ -124,12 +144,12 @@ public class BallProjectile : MonoBehaviour
         isPogoSeeking = false;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
-        canHitPlayer = true;
     }
 
     public void GetHitByBat(Vector2 newDirection)
     {
         isStopped = false;
+        stopTimer = 0f;
         speed *= speedMultiplierPerHit;
         damage *= damageMultiplierPerHit;
         bounces = 0;
@@ -140,16 +160,13 @@ public class BallProjectile : MonoBehaviour
         currentContactCollider = null;
         contactTimer = 0f;
 
-        if (newDirection.y < -0.1f) wasPogoHit = true;
-        else wasPogoHit = false;
-
+        wasPogoHit = (newDirection.y < -0.1f);
         rb.linearVelocity = newDirection.normalized * speed;
     }
 
     private void BounceLogic(Vector3 normal)
     {
         bounces++;
-        canHitPlayer = true;
         rb.linearVelocity = Vector3.Reflect(rb.linearVelocity, normal);
 
         if (bounces >= 1)

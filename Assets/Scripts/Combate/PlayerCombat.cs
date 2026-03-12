@@ -16,13 +16,16 @@ public class PlayerCombat : MonoBehaviour
     [SerializeField] private float pogoForce = 15f;
 
     [Header("Configuración Melee")]
+    [SerializeField] private float meleeCooldown = 0.5f; // Cooldown base de 0.5s
     [SerializeField] private float meleeDuration = 0.2f;
     [SerializeField] private float meleeOffsetDistance = 1.2f;
 
     private float throwTimer;
+    private float meleeTimer; // Temporizador para el bate
     private float lastPogoTime;
     private Vector2 aimDirection;
-    private Rigidbody rb; // Referencia para el Pogo
+    private Rigidbody rb;
+    private BallProjectile currentBall;
 
     private void Start()
     {
@@ -32,117 +35,87 @@ public class PlayerCombat : MonoBehaviour
 
     void Update()
     {
-        // Gestionar Inputs 
-        HandleInput();
-
-        //  Cooldown lanzamiento de bola
+        // Gestión de temporizadores
         if (throwTimer > 0) throwTimer -= Time.deltaTime;
+        if (meleeTimer > 0) meleeTimer -= Time.deltaTime;
 
-        // ataque con bate
+        // UNIFICADO: Todo con Click Izquierdo (Fire1)
         if (Input.GetButtonDown("Fire1"))
         {
-            PerformMelee();
-        }
-
-        // lanza bola 
-        if (Input.GetButtonDown("Fire2") && throwTimer <= 0)
-        {
-            ThrowBall();
+            HandleUniversalAttack();
         }
     }
 
-    private void HandleInput()
+    private void HandleUniversalAttack()
     {
-        float x = Input.GetAxisRaw("Horizontal");
-        float y = Input.GetAxisRaw("Vertical");
-
-        //logica de anclaje
-        bool isHoldingPosition = Input.GetKey(KeyCode.LeftControl);
-
-        if (isHoldingPosition)
+        // CASO 1: ESTAMOS EN EL AIRE
+        if (!playerController.CheckGrounded())
         {
+            aimDirection = Vector2.down; // Forzamos dirección hacia abajo
 
-            // Bloqueamos el movimiento en el controller
-            playerController.SetCanMove(false);
-
-            // Usamos las teclas WASD solo para definir aimDirection
-            if (x != 0 || y != 0)
+            if (currentBall != null)
             {
-                aimDirection = new Vector2(x, y).normalized;
-
-                // Giramos visualmente al personaje si apunta a los lados
-                if (x != 0) playerController.ManualFlip(x);
+                // Si la bola existe, intentamos golpearla (respetando su propio cooldown)
+                if (meleeTimer <= 0)
+                {
+                    PerformMelee();
+                }
             }
-            // Si no tocamos nada manteniendo Shift, mantenemos la última aimDirection
+            else if (throwTimer <= 0)
+            {
+                // Si no hay bola, la lanzamos hacia abajo
+                ThrowBall();
+            }
         }
+        // CASO 2: ESTAMOS EN EL SUELO
         else
         {
-
-            // Desbloqueamos el movimiento
-            playerController.SetCanMove(true);
-
-            // Prioridad de dirección
-            if (x != 0 || y != 0)
+            // Solo lanzamos si no hay una bola activa y el cooldown terminó
+            if (currentBall == null && throwTimer <= 0)
             {
-                aimDirection = new Vector2(x, y).normalized;
-            }
-            else
-            {
-
                 float facingDir = playerController.IsFacingRight() ? 1 : -1;
                 aimDirection = new Vector2(facingDir, 0);
+
+                ThrowBall();
             }
         }
     }
 
     private void PerformMelee()
     {
-        // Calcula posición spawn
+        // Activamos el cooldown del bate
+        meleeTimer = meleeCooldown;
+
         Vector3 spawnPos = transform.position + (Vector3)aimDirection * meleeOffsetDistance;
+        GameObject hitboxObj = Instantiate(meleeHitboxPrefab, spawnPos, Quaternion.identity);
+        hitboxObj.transform.parent = transform;
 
-        GameObject hitbox = Instantiate(meleeHitboxPrefab, spawnPos, Quaternion.identity);
-        hitbox.transform.parent = transform;
-
-        // Configurar hitbox
-        MeleeHitbox meleeScript = hitbox.GetComponent<MeleeHitbox>();
-        // Le pasamos 'this' para que pueda llamar a DoPogo()
+        MeleeHitbox meleeScript = hitboxObj.GetComponent<MeleeHitbox>();
         meleeScript.Setup(aimDirection, this);
 
-        Destroy(hitbox, meleeDuration);
+        Destroy(hitboxObj, meleeDuration);
     }
 
     private void ThrowBall()
     {
         throwTimer = throwCooldown;
 
-
-        // Si apuntas hacia abajo , hace el pogo automáticamente
-        if (aimDirection.y < -0.1f && Mathf.Abs(aimDirection.x) < 0.1f)
+        // Si lanzamos hacia abajo, aplicamos pogo
+        if (aimDirection.y < -0.1f)
         {
             DoPogo();
         }
 
-        GameObject ball = Instantiate(ballPrefab, firePoint.position, Quaternion.identity);
-        BallProjectile ballScript = ball.GetComponent<BallProjectile>();
-
-        ballScript.Initialize(aimDirection * throwForce, this);
+        GameObject ballObj = Instantiate(ballPrefab, firePoint.position, Quaternion.identity);
+        currentBall = ballObj.GetComponent<BallProjectile>();
+        currentBall.Initialize(aimDirection * throwForce, this);
     }
 
-    // Método público llamado por el MeleeHitbox o al lanzar bola abajo
     public void DoPogo()
     {
-        //  Evita que se ejecute 2 veces seguidas
         if (Time.time - lastPogoTime < 0.1f) return;
         lastPogoTime = Time.time;
-        //aseguro que el pogo sea consistente
-        rb.linearVelocity = new Vector3(rb.linearVelocity.x, pogoForce, 0f);
-    }
 
-    // Ayuda visual en el Editor
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Vector3 direction = Application.isPlaying ? (Vector3)aimDirection : Vector3.right;
-        Gizmos.DrawWireSphere(transform.position + direction * meleeOffsetDistance, 0.5f);
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, pogoForce, 0f);
     }
 }

@@ -228,7 +228,7 @@ public class PlayerController : MonoBehaviour
 
     // --- UTILITIES & CHECKS ---
 
-    private bool CheckGrounded()
+    public bool CheckGrounded()
     {
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
