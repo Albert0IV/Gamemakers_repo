@@ -68,17 +68,6 @@ public class PlayerCombat : MonoBehaviour
             }
         }
         // CASO 2: ESTAMOS EN EL SUELO
-        else
-        {
-            // Solo lanzamos si no hay una bola activa y el cooldown terminó
-            if (currentBall == null && throwTimer <= 0)
-            {
-                float facingDir = playerController.IsFacingRight() ? 1 : -1;
-                aimDirection = new Vector2(facingDir, 0);
-
-                ThrowBall();
-            }
-        }
     }
 
     private void PerformMelee()

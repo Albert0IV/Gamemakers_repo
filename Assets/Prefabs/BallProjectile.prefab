@@ -124,12 +124,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   speed: 15
   damage: 10
-  speedMultiplierPerHit: 1.05
+  speedMultiplierPerHit: 1
   damageMultiplierPerHit: 2
   homingSensitivity: 10
   pogoTargetOffset: {x: 0, y: -2, z: 0}
   pogoSeekPrecision: 1
   maxContactTime: 0.2
+  idleLifeTime: 1
 --- !u!54 &1689692553448120379
 Rigidbody:
   m_ObjectHideFlags: 0
