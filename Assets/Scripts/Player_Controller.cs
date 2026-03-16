@@ -3,7 +3,6 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    // Hacemos esta variable visible en el inspector para que veas si funciona el Stun
     [Header("Debug Estado")]
     public bool canMove = true;
 
@@ -29,11 +28,6 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float coyoteTime = 0.1f;
     private float coyoteTimer;
 
-    [Header("Double Jump")]
-    [SerializeField] private bool enableDoubleJump = true;
-    [SerializeField] private float doubleJumpVelocity = 12f;
-    private bool canDoubleJump;
-
     [Header("Dash")]
     [SerializeField] private float dashForce = 20f;
     [SerializeField] private float dashDuration = 0.2f;
@@ -56,81 +50,55 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Collider playerCollider;
     [SerializeField] private LayerMask groundLayer;
 
-    [Header("Resistencia en el aire")]
-    [SerializeField] private bool enableAirResistance = true;
-    [SerializeField] private float airAccelerationSmoothing = 0.08f;
-
-    private bool wasGroundedPrev = true;
     private float groundCheckDistance = 0.05f;
     private float wallCheckDistance = 0.05f;
+
+    // --- NUEVAS FUNCIONES PARA EL HUD ---
+    public float GetDashCooldownTimer() => dashCooldownTimer;
+    public float GetMaxDashCooldown() => dashCooldown;
+    public bool IsDashing() => isDashing;
 
     private void Start()
     {
         if (playerCollider == null) playerCollider = GetComponent<Collider>();
         if (rb == null) rb = GetComponent<Rigidbody>();
-
         if (transform.localScale.x < 0) isFacingRight = false;
     }
 
     void Update()
     {
-        // 1. GESTIÓN DE COOLDOWNS (Siempre corre, incluso aturdido)
         if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
 
         bool isGroundedNow = CheckGrounded();
-
-        // Coyote Time
-        if (isGroundedNow)
-        {
-            coyoteTimer = coyoteTime;
-            canDoubleJump = true;
-        }
-        else
-        {
-            coyoteTimer -= Time.deltaTime;
-        }
+        if (isGroundedNow) coyoteTimer = coyoteTime;
+        else coyoteTimer -= Time.deltaTime;
 
         isTouchingWall = CheckWall();
         isWallSliding = isTouchingWall && !isGroundedNow && rb.linearVelocity.y < 0.1f;
 
-        // ================================================================
-        // 2. BLOQUEO TOTAL DE INPUTS (STUN)
-        // Si canMove es false, NO leemos ni movimiento, ni salto, ni dash.
-        // ================================================================
         if (!canMove)
         {
             horizontal = 0f;
-            // IMPORTANTE: Al hacer return aquí, impedimos que se procese el Salto o Dash abajo.
-            // Esto asegura que el jugador no pueda cancelar el aturdimiento saltando.
             return;
         }
 
-        // --- INPUTS DE MOVIMIENTO (Solo si canMove es true) ---
-
         horizontal = Input.GetAxisRaw("Horizontal");
 
-        // Input Salto (Buffer)
-        if (Input.GetButtonDown("Jump"))
-            jumpBufferTimer = jumpBufferTime;
+        if (Input.GetButtonDown("Jump")) jumpBufferTimer = jumpBufferTime;
 
-        // Input Dash
         if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing)
             StartCoroutine(Dash());
 
-        // Salto variable (Jump Cut)
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier, 0f);
 
         Flip();
-
-        wasGroundedPrev = isGroundedNow;
     }
 
     private void FixedUpdate()
     {
         if (isDashing) return;
 
-        // Gravedad Personalizada (Siempre activa para que caigas bien al recibir daño en el aire)
         if (!CheckGrounded() && !isWallSliding)
         {
             float targetGravity = gravityNormal;
@@ -139,20 +107,11 @@ public class PlayerController : MonoBehaviour
             rb.AddForce(extraGravityForce, ForceMode.Acceleration);
         }
 
-        // BLOQUEO DE FÍSICAS POR STUN
-        // Si no nos podemos mover, dejamos que la fuerza del golpe (Knockback) nos mueva.
-        // No ejecutamos el código de movimiento normal.
         if (!canMove) return;
 
-        // --- LÓGICA DE MOVIMIENTO NORMAL ---
-
-        float currentSpeed = speed;
-
-        // Procesar Salto
         if (jumpBufferTimer > 0f)
         {
             bool performedAction = false;
-
             if (enableWallJump && isTouchingWall && !CheckGrounded())
             {
                 isWallJumping = true;
@@ -160,73 +119,44 @@ public class PlayerController : MonoBehaviour
                 float jumpDirection = isFacingRight ? -1f : 1f;
                 rb.linearVelocity = new Vector3(wallJumpForce.x * jumpDirection, wallJumpForce.y, 0f);
                 CheckFlipImmediate(jumpDirection);
-                jumpBufferTimer = 0f;
-                canDoubleJump = true;
                 performedAction = true;
             }
             else if (coyoteTimer > 0f)
             {
-                float jumpingPower = useJumpVelocity
-                    ? jumpVelocity
-                    : Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y * gravityNormal) * jumpHeight);
+                float jumpingPower = useJumpVelocity ? jumpVelocity : Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y * gravityNormal) * jumpHeight);
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, jumpingPower, 0f);
                 performedAction = true;
             }
-            else if (enableDoubleJump && canDoubleJump)
-            {
-                rb.linearVelocity = new Vector3(rb.linearVelocity.x, doubleJumpVelocity, 0f);
-                canDoubleJump = false;
-                performedAction = true;
-            }
 
-            if (performedAction) jumpBufferTimer = 0f; // Reset buffer
+            if (performedAction) jumpBufferTimer = 0f;
             else jumpBufferTimer -= Time.fixedDeltaTime;
         }
 
-        // Movimiento Horizontal
         if (!isWallJumping)
         {
-            float targetVelocityX = horizontal * currentSpeed;
-
+            float targetVelocityX = horizontal * speed;
             if (isWallSliding)
             {
-                bool pushingIntoWall = (isFacingRight && horizontal > 0) || (!isFacingRight && horizontal < 0);
-                if (pushingIntoWall) targetVelocityX = isFacingRight ? 0.5f : -0.5f;
+                if ((isFacingRight && horizontal > 0) || (!isFacingRight && horizontal < 0)) targetVelocityX = isFacingRight ? 0.5f : -0.5f;
             }
-
-            if (enableAirResistance && !CheckGrounded())
-            {
-                float smoothedVelocityX = Mathf.Lerp(rb.linearVelocity.x, targetVelocityX, airAccelerationSmoothing);
-                rb.linearVelocity = new Vector3(smoothedVelocityX, rb.linearVelocity.y, 0f);
-            }
-            else
-            {
-                rb.linearVelocity = new Vector3(targetVelocityX, rb.linearVelocity.y, 0f);
-            }
+            rb.linearVelocity = new Vector3(targetVelocityX, rb.linearVelocity.y, 0f);
         }
 
-        // Limitadores de velocidad (Wall Slide & Max Fall)
         if (isWallSliding && !isWallJumping)
         {
-            if (rb.linearVelocity.y < -wallSlideSpeed)
-                rb.linearVelocity = new Vector3(rb.linearVelocity.x, -wallSlideSpeed, 0f);
+            if (rb.linearVelocity.y < -wallSlideSpeed) rb.linearVelocity = new Vector3(rb.linearVelocity.x, -wallSlideSpeed, 0f);
         }
         else
         {
             float clampedY = Mathf.Clamp(rb.linearVelocity.y, maxFallSpeed, float.MaxValue);
-            if (rb.linearVelocity.y < clampedY)
-                rb.linearVelocity = new Vector3(rb.linearVelocity.x, clampedY, 0f);
+            if (rb.linearVelocity.y < clampedY) rb.linearVelocity = new Vector3(rb.linearVelocity.x, clampedY, 0f);
         }
     }
 
     void LateUpdate()
     {
-        Vector3 pos = transform.position;
-        pos.z = 0f;
-        transform.position = pos;
+        transform.position = new Vector3(transform.position.x, transform.position.y, 0f);
     }
-
-    // --- UTILITIES & CHECKS ---
 
     public bool CheckGrounded()
     {
@@ -242,8 +172,6 @@ public class PlayerController : MonoBehaviour
         Vector3 direction = isFacingRight ? Vector3.right : Vector3.left;
         return Physics.BoxCast(center, new Vector3(0.05f, size.y * 0.8f, size.z) / 2, direction, Quaternion.identity, (size.x / 2) + wallCheckDistance, groundLayer);
     }
-
-    // --- FLIP SYSTEM (Negative Scale) ---
 
     private void Flip()
     {
@@ -264,15 +192,6 @@ public class PlayerController : MonoBehaviour
         transform.localScale = localScale;
     }
 
-    public void ManualFlip(float xInput)
-    {
-        if ((isFacingRight && xInput < 0) || (!isFacingRight && xInput > 0)) PerformFlip();
-    }
-
-    public bool IsFacingRight() => isFacingRight;
-
-    // --- DASH ---
-
     private IEnumerator Dash()
     {
         isDashing = true;
@@ -289,30 +208,9 @@ public class PlayerController : MonoBehaviour
 
     private void StopWallJump() => isWallJumping = false;
 
-    // --- PUBLIC METHODS FOR HEALTH SCRIPT ---
-
-    public void SetCanMove(bool state)
+    public void SetCanMove(bool state) => canMove = state;
+    public bool IsFacingRight()
     {
-        canMove = state;
-
-        if (!canMove)
-        {
-            // Solo reseteamos animaciones y variables lógicas.
-            // NO tocamos rb.linearVelocity aquí para no frenar el Knockback.
-            horizontal = 0f;
-            jumpBufferTimer = 0f;
-            if (animator != null) animator.SetBool("isWalking", false);
-        }
-    }
-
-    private void OnDrawGizmos()
-    {
-        if (playerCollider == null) return;
-        Gizmos.color = Color.red;
-        Vector3 center = playerCollider.bounds.center;
-        Vector3 size = playerCollider.bounds.size;
-        Gizmos.DrawWireCube(center + Vector3.down * ((size.y / 2) + groundCheckDistance), new Vector3(size.x * 0.9f, 0.05f, size.z));
-        Vector3 direction = isFacingRight ? Vector3.right : Vector3.left;
-        Gizmos.DrawWireCube(center + direction * ((size.x / 2) + wallCheckDistance), new Vector3(0.05f, size.y * 0.8f, size.z));
+        return isFacingRight;
     }
 }

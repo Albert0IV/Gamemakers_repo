@@ -14,10 +14,10 @@ public class PlayerHealth : MonoBehaviour
     [SerializeField] private float invulnerabilityDuration = 2f;
 
     [Header("Configuración Teletransporte (Spikes)")]
-    [Tooltip("Tiempo que espera después del golpe de pinchos antes de teletransportarlo.")]
+    [Tooltip("Tiempo que espera después del golpe antes de teletransportarlo.")]
     [SerializeField] private float timeBeforeTeleport = 0.5f;
-    [Tooltip("Tiempo atrás para buscar la posición segura (ej. 10 segundos).")]
-    [SerializeField] private float safePositionDelay = 10f;
+    [Tooltip("Ajuste de altura para que el jugador no aparezca dentro del suelo.")]
+    [SerializeField] private float respawnOffsetY = 1.0f; // <--- NUEVO: Modificable en Inspector
 
     [Header("Ajustes de Knockback")]
     [SerializeField] private float knockbackForce = 12f;
@@ -31,14 +31,9 @@ public class PlayerHealth : MonoBehaviour
 
     private bool isInvulnerable;
 
-    // Estructura para guardar posiciones con tiempo
-    private struct PositionStamp
-    {
-        public Vector3 position;
-        public float time;
-    }
-    private List<PositionStamp> positionHistory = new List<PositionStamp>();
+    // Lógica de Checkpoints Unidireccionales
     private Vector3 lastSafePosition;
+    private int currentCheckpointIndex = -1;
 
     void Start()
     {
@@ -47,35 +42,23 @@ public class PlayerHealth : MonoBehaviour
         if (!rb) rb = GetComponent<Rigidbody>();
         if (!playerRenderer) playerRenderer = GetComponentInChildren<Renderer>();
 
-        lastSafePosition = transform.position; // Posición inicial por defecto
+        // Posición inicial por defecto
+        lastSafePosition = transform.position;
     }
 
-    void Update()
+    // --- SISTEMA DE CHECKPOINTS ---
+
+    public void SetCheckpoint(Vector3 newPos, int index)
     {
-        // Solo guardamos posición si el controlador dice que estamos en el suelo
-        // (Asumimos que tu PlayerController tiene una forma de saber si toca suelo, 
-        // pero usaremos una lógica interna aquí por seguridad)
-        if (CheckGroundedInternal())
+        if (index >= currentCheckpointIndex)
         {
-            positionHistory.Add(new PositionStamp { position = transform.position, time = Time.time });
-        }
-
-        // Limpiamos el historial para quedarnos solo con lo necesario
-        // Buscamos la posición que ocurrió hace 'safePositionDelay' segundos
-        UpdateSafePosition();
-    }
-
-    private void UpdateSafePosition()
-    {
-        float targetTime = Time.time - safePositionDelay;
-
-        // Buscamos en el historial el punto más cercano a hace 10 segundos
-        while (positionHistory.Count > 0 && positionHistory[0].time < targetTime)
-        {
-            lastSafePosition = positionHistory[0].position;
-            positionHistory.RemoveAt(0);
+            lastSafePosition = newPos;
+            currentCheckpointIndex = index;
+            Debug.Log($"<color=green>Checkpoint {index} activado.</color>");
         }
     }
+
+    // --- SISTEMA DE DAÑO ---
 
     public void TakeDamage(int damage, Vector3 sourcePos, bool isFromSpikes = false)
     {
@@ -89,13 +72,10 @@ public class PlayerHealth : MonoBehaviour
             return;
         }
 
-        // 1. STUN RADICAL
         if (controller != null) controller.enabled = false;
 
-        // 2. FÍSICA (Knockback inicial)
         ApplyKnockback(sourcePos);
 
-        // 3. SI SON PINCHOS -> TELETRANSPORTE
         if (isFromSpikes)
         {
             StartCoroutine(TeleportSequence());
@@ -110,18 +90,22 @@ public class PlayerHealth : MonoBehaviour
 
     private IEnumerator TeleportSequence()
     {
-        // Esperamos el tiempo configurable antes de teletransportar
         yield return new WaitForSeconds(timeBeforeTeleport);
 
-        // Teletransporte
         rb.linearVelocity = Vector3.zero;
-        transform.position = lastSafePosition;
+        rb.angularVelocity = Vector3.zero;
 
-        // Un pequeño margen extra antes de devolver el control para que la cámara se ajuste
+        // APLICAMOS EL OFFSET AQUÍ
+        // Calculamos la posición final sumando el offset en el eje Y
+        Vector3 spawnPos = new Vector3(lastSafePosition.x, lastSafePosition.y + respawnOffsetY, lastSafePosition.z);
+        transform.position = spawnPos;
+
         yield return new WaitForSeconds(0.1f);
 
         if (controller != null) controller.enabled = true;
     }
+
+    // ... (El resto del código: StunSequence, ApplyKnockback, InvulnerabilityFlash, OnCollisionEnter, etc. se mantienen igual)
 
     private IEnumerator StunSequence()
     {
@@ -152,24 +136,16 @@ public class PlayerHealth : MonoBehaviour
         isInvulnerable = false;
     }
 
-    // --- DETECCIÓN DE DAÑO ---
-
     private void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Spikes"))
-            TakeDamage(1, collision.contacts[0].point, true); // Enviamos 'true' porque son pinchos
+            TakeDamage(1, collision.contacts[0].point, true);
     }
 
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Spikes"))
-            TakeDamage(1, other.transform.position, true); // Enviamos 'true' porque son pinchos
-    }
-
-    private bool CheckGroundedInternal()
-    {
-        // Usamos un Raycast simple para saber si el player está tocando el suelo
-        return Physics.Raycast(transform.position, Vector3.down, 1.1f);
+            TakeDamage(1, other.transform.position, true);
     }
 
     private void RestartLevel()

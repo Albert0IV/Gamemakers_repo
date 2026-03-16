@@ -131,6 +131,7 @@ MonoBehaviour:
   pogoSeekPrecision: 1
   maxContactTime: 0.2
   idleLifeTime: 1
+  maxLifeAfterHit: 2
 --- !u!54 &1689692553448120379
 Rigidbody:
   m_ObjectHideFlags: 0

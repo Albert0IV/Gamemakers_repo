@@ -14,8 +14,11 @@ public class BallProjectile : MonoBehaviour
     [SerializeField] private float homingSensitivity = 5f;
     [SerializeField] private Vector3 pogoTargetOffset = new Vector3(0f, -2f, 0f);
     [SerializeField] private float pogoSeekPrecision = 1f;
-    [SerializeField] private float maxContactTime = 0.2f;
-    [SerializeField] private float idleLifeTime = 1.0f; // Tiempo para desaparecer
+    [SerializeField] private float maxContactTime = 0.2f; // Tiempo máximo rozando una pared
+    [SerializeField] private float idleLifeTime = 1.0f;  // Tiempo para borrar si está quieta
+
+    [Header("Temporizador de Vuelo")]
+    [SerializeField] private float maxLifeAfterHit = 5.0f; // Tiempo máximo tras el batazo
 
     private Rigidbody rb;
     private PlayerCombat player;
@@ -26,24 +29,28 @@ public class BallProjectile : MonoBehaviour
     private bool wasPogoHit = false;
     private bool isStopped = false;
     private bool canHitPlayer = false;
+    private bool wasLaunched = false;
 
     private float lifeTimeTimer = 0f;
     private float stopTimer = 0f;
+    private float launchTimer = 0f;
+
     private Collider currentContactCollider;
-    private float contactTimer;
+    private float contactTimer; // Ahora se usa correctamente para evitar el warning
 
     public void Initialize(Vector3 velocity, PlayerCombat owner)
     {
         rb = GetComponent<Rigidbody>();
         player = owner;
         rb.linearVelocity = velocity;
+        wasLaunched = true; // Empieza a contar desde que aparece
     }
 
     private void Update()
     {
         lifeTimeTimer += Time.deltaTime;
 
-        // Lógica de autodestrucción
+        // 1. Lógica de autodestrucción si la pelota se detiene
         if (isStopped)
         {
             stopTimer += Time.deltaTime;
@@ -57,7 +64,17 @@ public class BallProjectile : MonoBehaviour
             stopTimer = 0f;
         }
 
-        // Prevención de colisión inmediata con el jugador al aparecer
+        // 2. Lógica de autodestrucción desde el lanzamiento (Batazo)
+        if (wasLaunched && !isStopped)
+        {
+            launchTimer += Time.deltaTime;
+            if (launchTimer >= maxLifeAfterHit)
+            {
+                Destroy(gameObject);
+            }
+        }
+
+        // Prevención de colisión inmediata con el jugador
         if (lifeTimeTimer > 0.5f && !canHitPlayer && !isReturning && !isPogoSeeking)
         {
             canHitPlayer = true;
@@ -87,12 +104,11 @@ public class BallProjectile : MonoBehaviour
         }
         else
         {
-            // Mantener velocidad constante si no está buscando al jugador
             if (rb.linearVelocity.magnitude > 0)
                 rb.linearVelocity = rb.linearVelocity.normalized * speed;
         }
 
-        // Mantener el juego en 2D (Z = 0)
+        // Mantener el juego en 2D
         transform.position = new Vector3(transform.position.x, transform.position.y, 0);
     }
 
@@ -109,7 +125,6 @@ public class BallProjectile : MonoBehaviour
             return;
         }
 
-        // Sistema de daño (asegúrate de que IDamageable exista)
         if (collision.gameObject.TryGetComponent<IDamageable>(out IDamageable damageable))
         {
             damageable.TakeDamage(damage, transform.position);
@@ -121,10 +136,15 @@ public class BallProjectile : MonoBehaviour
     private void OnCollisionStay(Collision collision)
     {
         if (isStopped) return;
+
+        // Uso de contactTimer y maxContactTime para evitar los warnings y mejorar el gameplay
         if (collision.collider == currentContactCollider)
         {
-            contactTimer += Time.fixedDeltaTime;
-            if (contactTimer > maxContactTime) StopBall();
+            contactTimer += Time.deltaTime;
+            if (contactTimer >= maxContactTime)
+            {
+                StopBall();
+            }
         }
     }
 
@@ -142,6 +162,7 @@ public class BallProjectile : MonoBehaviour
         isStopped = true;
         isReturning = false;
         isPogoSeeking = false;
+        wasLaunched = false; // Detener el reloj de vuelo al frenar
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
     }
@@ -150,6 +171,11 @@ public class BallProjectile : MonoBehaviour
     {
         isStopped = false;
         stopTimer = 0f;
+
+        // Reiniciar el tiempo de vida en cada batazo
+        launchTimer = 0f;
+        wasLaunched = true;
+
         speed *= speedMultiplierPerHit;
         damage *= damageMultiplierPerHit;
         bounces = 0;

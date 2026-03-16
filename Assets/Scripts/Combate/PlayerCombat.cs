@@ -16,16 +16,23 @@ public class PlayerCombat : MonoBehaviour
     [SerializeField] private float pogoForce = 15f;
 
     [Header("Configuración Melee")]
-    [SerializeField] private float meleeCooldown = 0.5f; // Cooldown base de 0.5s
+    [SerializeField] private float meleeCooldown = 0.5f;
     [SerializeField] private float meleeDuration = 0.2f;
     [SerializeField] private float meleeOffsetDistance = 1.2f;
 
     private float throwTimer;
-    private float meleeTimer; // Temporizador para el bate
+    private float meleeTimer;
     private float lastPogoTime;
     private Vector2 aimDirection;
     private Rigidbody rb;
     private BallProjectile currentBall;
+
+    // --- NUEVA FUNCIÓN PARA EL HUD ---
+    public bool CanShoot()
+    {
+        // Puedes disparar si no hay una bola activa Y el cooldown ha terminado
+        return currentBall == null && throwTimer <= 0;
+    }
 
     private void Start()
     {
@@ -39,6 +46,13 @@ public class PlayerCombat : MonoBehaviour
         if (throwTimer > 0) throwTimer -= Time.deltaTime;
         if (meleeTimer > 0) meleeTimer -= Time.deltaTime;
 
+        // Limpieza de referencia: Si la bola fue destruida, ponemos currentBall a null
+        // Esto permite que el HUD sepa instantáneamente que la bola ya no está en juego.
+        if (currentBall != null && currentBall.gameObject == null)
+        {
+            currentBall = null;
+        }
+
         // UNIFICADO: Todo con Click Izquierdo (Fire1)
         if (Input.GetButtonDown("Fire1"))
         {
@@ -48,31 +62,35 @@ public class PlayerCombat : MonoBehaviour
 
     private void HandleUniversalAttack()
     {
-        // CASO 1: ESTAMOS EN EL AIRE
+        // Determinamos la dirección (siempre hacia donde mira el personaje o abajo si saltas)
+        // Aquí puedes añadir lógica para disparar hacia adelante si estás en el suelo
         if (!playerController.CheckGrounded())
         {
-            aimDirection = Vector2.down; // Forzamos dirección hacia abajo
+            aimDirection = Vector2.down;
+        }
+        else
+        {
+            // Disparar horizontalmente basado en hacia donde mira el controller
+            aimDirection = playerController.IsFacingRight() ? Vector2.right : Vector2.left;
+        }
 
-            if (currentBall != null)
+        if (currentBall != null)
+        {
+            // Si la bola existe, el click intenta batearla
+            if (meleeTimer <= 0)
             {
-                // Si la bola existe, intentamos golpearla (respetando su propio cooldown)
-                if (meleeTimer <= 0)
-                {
-                    PerformMelee();
-                }
-            }
-            else if (throwTimer <= 0)
-            {
-                // Si no hay bola, la lanzamos hacia abajo
-                ThrowBall();
+                PerformMelee();
             }
         }
-        // CASO 2: ESTAMOS EN EL SUELO
+        else if (throwTimer <= 0)
+        {
+            // Si no hay bola y no hay cooldown, la lanzamos
+            ThrowBall();
+        }
     }
 
     private void PerformMelee()
     {
-        // Activamos el cooldown del bate
         meleeTimer = meleeCooldown;
 
         Vector3 spawnPos = transform.position + (Vector3)aimDirection * meleeOffsetDistance;
@@ -89,7 +107,7 @@ public class PlayerCombat : MonoBehaviour
     {
         throwTimer = throwCooldown;
 
-        // Si lanzamos hacia abajo, aplicamos pogo
+        // Si lanzamos hacia abajo (en el aire), aplicamos pogo
         if (aimDirection.y < -0.1f)
         {
             DoPogo();
