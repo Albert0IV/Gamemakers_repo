@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 
 public class PlayerHealth : MonoBehaviour
@@ -14,10 +13,8 @@ public class PlayerHealth : MonoBehaviour
     [SerializeField] private float invulnerabilityDuration = 2f;
 
     [Header("Configuración Teletransporte (Spikes)")]
-    [Tooltip("Tiempo que espera después del golpe antes de teletransportarlo.")]
     [SerializeField] private float timeBeforeTeleport = 0.5f;
-    [Tooltip("Ajuste de altura para que el jugador no aparezca dentro del suelo.")]
-    [SerializeField] private float respawnOffsetY = 1.0f; // <--- NUEVO: Modificable en Inspector
+    [SerializeField] private float respawnOffsetY = 1.0f;
 
     [Header("Ajustes de Knockback")]
     [SerializeField] private float knockbackForce = 12f;
@@ -31,9 +28,10 @@ public class PlayerHealth : MonoBehaviour
 
     private bool isInvulnerable;
 
-    // Lógica de Checkpoints Unidireccionales
+    // --- LÓGICA DE POSICIÓN SEGURA ---
     private Vector3 lastSafePosition;
     private int currentCheckpointIndex = -1;
+    private Vector3 initialPosition; // Posición de seguridad absoluta al iniciar la escena
 
     void Start()
     {
@@ -42,23 +40,24 @@ public class PlayerHealth : MonoBehaviour
         if (!rb) rb = GetComponent<Rigidbody>();
         if (!playerRenderer) playerRenderer = GetComponentInChildren<Renderer>();
 
-        // Posición inicial por defecto
-        lastSafePosition = transform.position;
+        // Guardamos la posición inicial real del objeto en la jerarquía
+        initialPosition = transform.position;
+
+        // Al empezar, la posición segura es la inicial por si no hay checkpoints
+        lastSafePosition = initialPosition;
     }
 
     // --- SISTEMA DE CHECKPOINTS ---
-
     public void SetCheckpoint(Vector3 newPos, int index)
     {
+        // Solo actualizamos si el nuevo checkpoint es el mismo o uno posterior
         if (index >= currentCheckpointIndex)
         {
             lastSafePosition = newPos;
             currentCheckpointIndex = index;
-            Debug.Log($"<color=green>Checkpoint {index} activado.</color>");
+           
         }
     }
-
-    // --- SISTEMA DE DAÑO ---
 
     public void TakeDamage(int damage, Vector3 sourcePos, bool isFromSpikes = false)
     {
@@ -72,6 +71,7 @@ public class PlayerHealth : MonoBehaviour
             return;
         }
 
+        // Desactivamos el script de movimiento para que no interfiera con el knockback/teleport
         if (controller != null) controller.enabled = false;
 
         ApplyKnockback(sourcePos);
@@ -92,26 +92,19 @@ public class PlayerHealth : MonoBehaviour
     {
         yield return new WaitForSeconds(timeBeforeTeleport);
 
+        // Limpiar inercias
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        // APLICAMOS EL OFFSET AQUÍ
-        // Calculamos la posición final sumando el offset en el eje Y
-        Vector3 spawnPos = new Vector3(lastSafePosition.x, lastSafePosition.y + respawnOffsetY, lastSafePosition.z);
-        transform.position = spawnPos;
+        // Teletransporte a la posición segura (Checkpoint o posición inicial)
+        transform.position = lastSafePosition + (Vector3.up * respawnOffsetY);
 
         yield return new WaitForSeconds(0.1f);
 
         if (controller != null) controller.enabled = true;
     }
 
-    // ... (El resto del código: StunSequence, ApplyKnockback, InvulnerabilityFlash, OnCollisionEnter, etc. se mantienen igual)
-
-    private IEnumerator StunSequence()
-    {
-        yield return new WaitForSeconds(stunTime);
-        if (controller != null) controller.enabled = true;
-    }
+    // ... (Mantén tus métodos ApplyKnockback, StunSequence e InvulnerabilityFlash igual)
 
     private void ApplyKnockback(Vector3 sourcePos)
     {
@@ -120,6 +113,12 @@ public class PlayerHealth : MonoBehaviour
         float sideDir = (transform.position.x - sourcePos.x) >= 0 ? 1f : -1f;
         Vector3 finalForce = new Vector3(sideDir * horizontalForceRatio * knockbackForce, upwardForceRatio * knockbackForce, 0f);
         rb.AddForce(finalForce, ForceMode.VelocityChange);
+    }
+
+    private IEnumerator StunSequence()
+    {
+        yield return new WaitForSeconds(stunTime);
+        if (controller != null) controller.enabled = true;
     }
 
     private IEnumerator InvulnerabilityFlash()
@@ -150,6 +149,7 @@ public class PlayerHealth : MonoBehaviour
 
     private void RestartLevel()
     {
+        // Al reiniciar la escena, todo vuelve a como estaba en el editor
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }
