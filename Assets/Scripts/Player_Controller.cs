@@ -44,6 +44,11 @@ public class PlayerController : MonoBehaviour
     private bool isWallJumping = false;
     private float wallJumpDuration = 0.2f;
 
+    [Header("Partículas (VFX)")]
+    [SerializeField] private ParticleSystem dashParticles;    // Rastro del Dash
+    [SerializeField] private ParticleSystem landingParticles; // Polvo al aterrizar
+    private bool wasGrounded;
+
     [Header("Componentes")]
     [SerializeField] private Rigidbody rb;
     [SerializeField] private Animator animator;
@@ -53,7 +58,6 @@ public class PlayerController : MonoBehaviour
     private float groundCheckDistance = 0.05f;
     private float wallCheckDistance = 0.05f;
 
-    // --- NUEVAS FUNCIONES PARA EL HUD ---
     public float GetDashCooldownTimer() => dashCooldownTimer;
     public float GetMaxDashCooldown() => dashCooldown;
     public bool IsDashing() => isDashing;
@@ -63,6 +67,8 @@ public class PlayerController : MonoBehaviour
         if (playerCollider == null) playerCollider = GetComponent<Collider>();
         if (rb == null) rb = GetComponent<Rigidbody>();
         if (transform.localScale.x < 0) isFacingRight = false;
+
+        if (dashParticles != null) dashParticles.Stop();
     }
 
     void Update()
@@ -70,6 +76,14 @@ public class PlayerController : MonoBehaviour
         if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
 
         bool isGroundedNow = CheckGrounded();
+
+        // Efecto de Aterrizaje
+        if (isGroundedNow && !wasGrounded && rb.linearVelocity.y < -1f)
+        {
+            if (landingParticles != null) landingParticles.Play();
+        }
+        wasGrounded = isGroundedNow;
+
         if (isGroundedNow) coyoteTimer = coyoteTime;
         else coyoteTimer -= Time.deltaTime;
 
@@ -196,10 +210,20 @@ public class PlayerController : MonoBehaviour
     {
         isDashing = true;
         rb.useGravity = false;
+
+        if (dashParticles != null) dashParticles.Play(); // Activar rastro
+
+        CameraSystem cam = Camera.main.GetComponent<CameraSystem>();
+        if (cam != null) cam.ShakeDash();
+
         Vector3 dashDirection = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, 0f).normalized;
         if (dashDirection == Vector3.zero) dashDirection = isFacingRight ? Vector3.right : Vector3.left;
         rb.linearVelocity = dashDirection * dashForce;
+
         yield return new WaitForSeconds(dashDuration);
+
+        if (dashParticles != null) dashParticles.Stop(); // Desactivar rastro
+
         rb.useGravity = true;
         isDashing = false;
         dashCooldownTimer = dashCooldown;
@@ -209,8 +233,5 @@ public class PlayerController : MonoBehaviour
     private void StopWallJump() => isWallJumping = false;
 
     public void SetCanMove(bool state) => canMove = state;
-    public bool IsFacingRight()
-    {
-        return isFacingRight;
-    }
+    public bool IsFacingRight() => isFacingRight;
 }

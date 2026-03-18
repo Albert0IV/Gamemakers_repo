@@ -27,33 +27,41 @@ public class PlayerCombat : MonoBehaviour
     private Rigidbody rb;
     private BallProjectile currentBall;
 
-    // --- NUEVA FUNCIÓN PARA EL HUD ---
+    // Eliminamos la variable isCooldownActive que daba error y usamos throwTimer directamente
+
+    public float GetThrowTimer() => throwTimer;
+    public float GetMaxThrowCooldown() => throwCooldown;
+    public bool HasBallInWorld() => currentBall != null;
+
     public bool CanShoot()
     {
-        // Puedes disparar si no hay una bola activa Y el cooldown ha terminado
-        return currentBall == null && throwTimer <= 0;
+        // Solo dispara si NO hay bola en el mundo, el timer llegó a 0 y NO está en el suelo
+        return currentBall == null && throwTimer <= 0 && !playerController.CheckGrounded();
     }
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
         if (playerController == null) playerController = GetComponent<PlayerController>();
+        throwTimer = 0; // Empezamos con la bola lista
     }
 
     void Update()
     {
-        // Gestión de temporizadores
-        if (throwTimer > 0) throwTimer -= Time.deltaTime;
-        if (meleeTimer > 0) meleeTimer -= Time.deltaTime;
-
-        // Limpieza de referencia: Si la bola fue destruida, ponemos currentBall a null
-        // Esto permite que el HUD sepa instantáneamente que la bola ya no está en juego.
-        if (currentBall != null && currentBall.gameObject == null)
+        // El temporizador siempre intenta bajar a 0
+        if (throwTimer > 0)
         {
-            currentBall = null;
+            throwTimer -= Time.deltaTime;
         }
 
-        // UNIFICADO: Todo con Click Izquierdo (Fire1)
+        if (meleeTimer > 0) meleeTimer -= Time.deltaTime;
+
+        // Si la bola se destruye (por ejemplo, cae al vacío), recuperamos el estado
+        if (currentBall != null && currentBall.gameObject == null)
+        {
+            ReturnBall();
+        }
+
         if (Input.GetButtonDown("Fire1"))
         {
             HandleUniversalAttack();
@@ -62,67 +70,53 @@ public class PlayerCombat : MonoBehaviour
 
     private void HandleUniversalAttack()
     {
-        // Determinamos la dirección (siempre hacia donde mira el personaje o abajo si saltas)
-        // Aquí puedes añadir lógica para disparar hacia adelante si estás en el suelo
-        if (!playerController.CheckGrounded())
-        {
-            aimDirection = Vector2.down;
-        }
-        else
-        {
-            // Disparar horizontalmente basado en hacia donde mira el controller
-            aimDirection = playerController.IsFacingRight() ? Vector2.right : Vector2.left;
-        }
+        aimDirection = Vector2.down;
 
         if (currentBall != null)
         {
-            // Si la bola existe, el click intenta batearla
-            if (meleeTimer <= 0)
-            {
-                PerformMelee();
-            }
+            if (meleeTimer <= 0) PerformMelee();
         }
-        else if (throwTimer <= 0)
+        else if (throwTimer <= 0 && !playerController.CheckGrounded())
         {
-            // Si no hay bola y no hay cooldown, la lanzamos
             ThrowBall();
         }
+    }
+
+    private void ThrowBall()
+    {
+        DoPogo();
+        GameObject ballObj = Instantiate(ballPrefab, firePoint.position, Quaternion.identity);
+        currentBall = ballObj.GetComponent<BallProjectile>();
+        currentBall.Initialize(aimDirection * throwForce, this);
+
+        // Al lanzar, NO activamos el timer todavía. 
+        // El HUD detectará que currentBall != null y se pondrá a 0.
+        throwTimer = 0;
+    }
+
+    public void ReturnBall()
+    {
+        currentBall = null;
+        // AQUÍ es donde empieza el tiempo de espera
+        throwTimer = throwCooldown;
     }
 
     private void PerformMelee()
     {
         meleeTimer = meleeCooldown;
-
         Vector3 spawnPos = transform.position + (Vector3)aimDirection * meleeOffsetDistance;
         GameObject hitboxObj = Instantiate(meleeHitboxPrefab, spawnPos, Quaternion.identity);
         hitboxObj.transform.parent = transform;
-
         MeleeHitbox meleeScript = hitboxObj.GetComponent<MeleeHitbox>();
         meleeScript.Setup(aimDirection, this);
-
         Destroy(hitboxObj, meleeDuration);
-    }
-
-    private void ThrowBall()
-    {
-        throwTimer = throwCooldown;
-
-        // Si lanzamos hacia abajo (en el aire), aplicamos pogo
-        if (aimDirection.y < -0.1f)
-        {
-            DoPogo();
-        }
-
-        GameObject ballObj = Instantiate(ballPrefab, firePoint.position, Quaternion.identity);
-        currentBall = ballObj.GetComponent<BallProjectile>();
-        currentBall.Initialize(aimDirection * throwForce, this);
     }
 
     public void DoPogo()
     {
         if (Time.time - lastPogoTime < 0.1f) return;
         lastPogoTime = Time.time;
-
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, pogoForce, 0f);
     }
+  
 }

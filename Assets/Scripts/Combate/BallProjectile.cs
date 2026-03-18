@@ -14,14 +14,17 @@ public class BallProjectile : MonoBehaviour
     [SerializeField] private float homingSensitivity = 5f;
     [SerializeField] private Vector3 pogoTargetOffset = new Vector3(0f, -2f, 0f);
     [SerializeField] private float pogoSeekPrecision = 1f;
-    [SerializeField] private float maxContactTime = 0.2f; // Tiempo máximo rozando una pared
-    [SerializeField] private float idleLifeTime = 1.0f;  // Tiempo para borrar si está quieta
+    [SerializeField] private float maxContactTime = 0.2f;
+    [SerializeField] private float idleLifeTime = 1.0f;
 
     [Header("Temporizador de Vuelo")]
-    [SerializeField] private float maxLifeAfterHit = 5.0f; // Tiempo máximo tras el batazo
+    [SerializeField] private float maxLifeAfterHit = 5.0f;
+
+    [Header("VFX")]
+    [SerializeField] private ParticleSystem trailParticles;
 
     private Rigidbody rb;
-    private PlayerCombat player;
+    private PlayerCombat player; // Referencia al script que me pasaste
     private int bounces = 0;
 
     private bool isReturning = false;
@@ -36,27 +39,28 @@ public class BallProjectile : MonoBehaviour
     private float launchTimer = 0f;
 
     private Collider currentContactCollider;
-    private float contactTimer; // Ahora se usa correctamente para evitar el warning
+    private float contactTimer;
 
     public void Initialize(Vector3 velocity, PlayerCombat owner)
     {
         rb = GetComponent<Rigidbody>();
         player = owner;
+        // Cambiado a .linearVelocity para ser compatible con Unity moderno (como tu original)
         rb.linearVelocity = velocity;
-        wasLaunched = true; // Empieza a contar desde que aparece
+        wasLaunched = true;
+        if (trailParticles != null) trailParticles.Play();
     }
 
     private void Update()
     {
         lifeTimeTimer += Time.deltaTime;
 
-        // 1. Lógica de autodestrucción si la pelota se detiene
         if (isStopped)
         {
             stopTimer += Time.deltaTime;
             if (stopTimer >= idleLifeTime)
             {
-                Destroy(gameObject);
+                NotifyAndDestroy();
             }
         }
         else
@@ -64,17 +68,15 @@ public class BallProjectile : MonoBehaviour
             stopTimer = 0f;
         }
 
-        // 2. Lógica de autodestrucción desde el lanzamiento (Batazo)
         if (wasLaunched && !isStopped)
         {
             launchTimer += Time.deltaTime;
             if (launchTimer >= maxLifeAfterHit)
             {
-                Destroy(gameObject);
+                NotifyAndDestroy();
             }
         }
 
-        // Prevención de colisión inmediata con el jugador
         if (lifeTimeTimer > 0.5f && !canHitPlayer && !isReturning && !isPogoSeeking)
         {
             canHitPlayer = true;
@@ -108,7 +110,6 @@ public class BallProjectile : MonoBehaviour
                 rb.linearVelocity = rb.linearVelocity.normalized * speed;
         }
 
-        // Mantener el juego en 2D
         transform.position = new Vector3(transform.position.x, transform.position.y, 0);
     }
 
@@ -121,7 +122,7 @@ public class BallProjectile : MonoBehaviour
 
         if (collision.gameObject.CompareTag("Player"))
         {
-            if (canHitPlayer || isReturning) Destroy(gameObject);
+            if (canHitPlayer || isReturning) NotifyAndDestroy();
             return;
         }
 
@@ -137,7 +138,6 @@ public class BallProjectile : MonoBehaviour
     {
         if (isStopped) return;
 
-        // Uso de contactTimer y maxContactTime para evitar los warnings y mejorar el gameplay
         if (collision.collider == currentContactCollider)
         {
             contactTimer += Time.deltaTime;
@@ -162,17 +162,16 @@ public class BallProjectile : MonoBehaviour
         isStopped = true;
         isReturning = false;
         isPogoSeeking = false;
-        wasLaunched = false; // Detener el reloj de vuelo al frenar
+        wasLaunched = false;
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
+        if (trailParticles != null) trailParticles.Stop();
     }
 
     public void GetHitByBat(Vector2 newDirection)
     {
         isStopped = false;
         stopTimer = 0f;
-
-        // Reiniciar el tiempo de vida en cada batazo
         launchTimer = 0f;
         wasLaunched = true;
 
@@ -188,6 +187,7 @@ public class BallProjectile : MonoBehaviour
 
         wasPogoHit = (newDirection.y < -0.1f);
         rb.linearVelocity = newDirection.normalized * speed;
+        if (trailParticles != null) trailParticles.Play();
     }
 
     private void BounceLogic(Vector3 normal)
@@ -207,5 +207,12 @@ public class BallProjectile : MonoBehaviour
                 isReturning = true;
             }
         }
+    }
+
+    private void NotifyAndDestroy()
+    {
+        // Esta función EXISTE en tu PlayerCombat, así que no dará error.
+        if (player != null) player.ReturnBall();
+        Destroy(gameObject);
     }
 }

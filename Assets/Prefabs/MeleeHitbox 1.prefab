@@ -124,3 +124,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   batDamage: 20
+  hitParticlesPrefab: {fileID: 4368237516275563461, guid: 12602669c8a873549863184d05170828, type: 3}

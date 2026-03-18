@@ -6,88 +6,77 @@ public class CameraSystem : MonoBehaviour
     [SerializeField] private Transform target;
 
     [Header("Seguimiento")]
-    [SerializeField] private float smoothSpeed = 5f;
+    [SerializeField] private float smoothSpeed = 10f; // Aumentado para mayor respuesta
     [SerializeField] private Vector3 offset = new Vector3(0, 2, -10);
 
-    [Header("Anticipación Horizontal")]
+    [Header("Anticipación")]
     [SerializeField] private float lookAheadDistance = 4f;
     [SerializeField] private float lookAheadSpeed = 2.5f;
 
-    [Header("Mirar Arriba/Abajo (W/S)")]
-    [SerializeField] private float lookUpDistance = 6f;
-    [SerializeField] private float lookDownDistance = 4f;
-    [SerializeField] private float idleWaitBeforeLook = 1f; // El segundo de quietud que pides
-    [SerializeField] private float verticalWaitTime = 2f;    // Los 2 segundos de mantener W/S
-    [SerializeField] private float verticalSmoothSpeed = 3f;
+    [Header("Ajustes de Screen Shake")]
+    // Asegúrate de que estos valores NO sean 0 en el Inspector
+    public float pogoMagnitude = 0.3f;
+    public float pogoDuration = 0.1f;
+    public float damageMagnitude = 0.7f;
+    public float damageDuration = 0.4f;
+    public float dashMagnitude = 0.15f;
+    public float dashDuration = 0.1f;
+
+    private float shakeTimeRemaining;
+    private float currentShakeMagnitude;
+    private Vector3 currentShakeOffset;
 
     private float currentLookAheadX;
-    private float currentLookVerticalY;
-    private float verticalTimer;
-    private float idleTimer; // Contador para la quietud
     private float lastDirectionX = 1;
+
+    // Métodos públicos
+    public void ShakePogo() { TriggerShake(pogoDuration, pogoMagnitude); }
+    public void ShakeDamage() { TriggerShake(damageDuration, damageMagnitude); }
+    public void ShakeDash() { TriggerShake(dashDuration, dashMagnitude); }
+
+    private void TriggerShake(float duration, float magnitude)
+    {
+        shakeTimeRemaining = duration;
+        currentShakeMagnitude = magnitude;
+        Debug.Log("SHAKE DISPARADO: Mag " + magnitude + " Dur " + duration);
+    }
 
     void LateUpdate()
     {
         if (target == null) return;
 
-        // 1. OBTENER INPUT
+        // 1. Lógica de Seguimiento Horizontal
         float moveInputX = Input.GetAxisRaw("Horizontal");
-        float moveInputY = Input.GetAxisRaw("Vertical");
+        if (moveInputX != 0) lastDirectionX = moveInputX > 0 ? 1 : -1;
 
-        // 2. LÓGICA HORIZONTAL
-        if (moveInputX != 0)
+        currentLookAheadX = Mathf.Lerp(currentLookAheadX, lastDirectionX * lookAheadDistance, Time.deltaTime * lookAheadSpeed);
+
+        // 2. Lógica de Shake (Cálculo del Offset)
+        if (shakeTimeRemaining > 0)
         {
-            lastDirectionX = moveInputX > 0 ? 1 : -1;
-            idleTimer = 0; // Si se mueve horizontalmente, reseteamos la quietud
-        }
+            shakeTimeRemaining -= Time.deltaTime;
 
-        float targetLookAheadX = lastDirectionX * lookAheadDistance;
-        currentLookAheadX = Mathf.Lerp(currentLookAheadX, targetLookAheadX, Time.deltaTime * lookAheadSpeed);
-
-        // 3. LÓGICA DE QUIETUD Y VERTICAL
-        // Primero: ¿El jugador está quieto horizontalmente?
-        if (moveInputX == 0)
-        {
-            idleTimer += Time.deltaTime;
+            // Usamos InsideUnitCircle para que solo afecte a X e Y (2D) y no a la profundidad Z
+            Vector2 randomPoint = Random.insideUnitCircle * currentShakeMagnitude;
+            currentShakeOffset = new Vector3(randomPoint.x, randomPoint.y, 0);
         }
         else
         {
-            idleTimer = 0;
-            verticalTimer = 0;
+            currentShakeOffset = Vector3.zero;
         }
 
-        float targetVerticalY = 0;
+        // 3. Aplicación Final
+        // Calculamos a dónde debería ir la cámara
+        Vector3 desiredPos = target.position + offset;
+        desiredPos.x += currentLookAheadX;
 
-        // Solo si ha estado quieto más del tiempo de reposo (1s), permitimos contar el tiempo de mirada (2s)
-        if (idleTimer >= idleWaitBeforeLook)
-        {
-            if (moveInputY != 0)
-            {
-                verticalTimer += Time.deltaTime;
-            }
-            else
-            {
-                verticalTimer = 0;
-            }
+        // Suavizamos el movimiento hacia esa posición
+        Vector3 smoothedPos = Vector3.Lerp(transform.position, desiredPos, smoothSpeed * Time.deltaTime);
 
-            if (verticalTimer >= verticalWaitTime)
-            {
-                targetVerticalY = (moveInputY > 0) ? lookUpDistance : -lookDownDistance;
-            }
-        }
-        else
-        {
-            verticalTimer = 0; // Si no ha pasado el segundo de reposo, el contador de W/S no sube
-        }
+        // IMPORTANTE: Sumamos el shake DESPUÉS del Lerp para que el suavizado no lo anule
+        transform.position = smoothedPos + currentShakeOffset;
 
-        currentLookVerticalY = Mathf.Lerp(currentLookVerticalY, targetVerticalY, Time.deltaTime * verticalSmoothSpeed);
-
-        // 4. POSICIÓN FINAL
-        Vector3 desiredPosition = target.position + offset;
-        desiredPosition.x += currentLookAheadX;
-        desiredPosition.y += currentLookVerticalY;
-
-        transform.position = Vector3.Lerp(transform.position, desiredPosition, smoothSpeed * Time.deltaTime);
+        // Bloqueamos la rotación para que no baile
         transform.rotation = Quaternion.identity;
     }
 }

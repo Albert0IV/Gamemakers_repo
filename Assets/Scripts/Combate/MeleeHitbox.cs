@@ -4,7 +4,10 @@ public class MeleeHitbox : MonoBehaviour
 {
     private Vector2 strikeDirection;
     private PlayerCombat player;
-    [SerializeField] private int batDamage = 20; // Daño estándar del bate
+    [SerializeField] private int batDamage = 20;
+
+    [Header("VFX")]
+    [SerializeField] private GameObject hitParticlesPrefab; // ASIGNAR PREFAB CHISPAS
 
     public void Setup(Vector2 dir, PlayerCombat playerRef)
     {
@@ -16,31 +19,37 @@ public class MeleeHitbox : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // GOLPEAR BOLA (Caso especial por su lógica de dirección y pogo)
         if (other.CompareTag("Ball"))
         {
             BallProjectile ball = other.GetComponent<BallProjectile>();
             if (ball != null)
             {
+                SpawnHitParticles(other.transform.position); // VFX
                 ball.GetHitByBat(strikeDirection);
                 if (strikeDirection.y < -0.1f) player.DoPogo();
                 return;
             }
         }
 
-        // SISTEMA UNIVERSAL: Enemigos, Palancas, Objetos Rompibles
         IDamageable damageable = other.GetComponent<IDamageable>();
         if (damageable != null)
         {
-            // Aplicamos el daño del bate
+            SpawnHitParticles(other.transform.position); // VFX
             damageable.TakeDamage(batDamage, player.transform.position);
 
-            // Si golpeamos hacia abajo contra algo dañable, hacemos pogo
-            
+            if (strikeDirection.y < -0.1f) player.DoPogo();
 
-            // Si tiene físicas, aplicamos un empuje extra
             Rigidbody rb = other.GetComponent<Rigidbody>();
             if (rb != null) rb.AddForce(strikeDirection * 5f, ForceMode.Impulse);
+        }
+    }
+
+    private void SpawnHitParticles(Vector3 pos)
+    {
+        if (hitParticlesPrefab != null)
+        {
+            GameObject fx = Instantiate(hitParticlesPrefab, pos, Quaternion.identity);
+            Destroy(fx, 1f);
         }
     }
 }
