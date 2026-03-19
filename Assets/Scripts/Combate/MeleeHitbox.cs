@@ -19,13 +19,26 @@ public class MeleeHitbox : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // Buscamos el sistema de cámara en la escena
+        CameraSystem cam = FindFirstObjectByType<CameraSystem>();
+
         if (other.CompareTag("Ball"))
         {
             BallProjectile ball = other.GetComponent<BallProjectile>();
             if (ball != null)
             {
-                SpawnHitParticles(other.transform.position); // VFX
+                SpawnHitParticles(other.transform.position);
                 ball.GetHitByBat(strikeDirection);
+
+                // Lógica de Shake para la Pelota
+                if (cam != null)
+                {
+                    if (strikeDirection.y < -0.1f)
+                        cam.ShakePogo(); // Shake fuerte si es pogo
+                    else
+                        cam.ShakeDash(); // Shake ligero si es batazo normal
+                }
+
                 if (strikeDirection.y < -0.1f) player.DoPogo();
                 return;
             }
@@ -34,8 +47,17 @@ public class MeleeHitbox : MonoBehaviour
         IDamageable damageable = other.GetComponent<IDamageable>();
         if (damageable != null)
         {
-            SpawnHitParticles(other.transform.position); // VFX
+            SpawnHitParticles(other.transform.position);
             damageable.TakeDamage(batDamage, player.transform.position);
+
+            // Lógica de Shake para Enemigos/Objetos
+            if (cam != null)
+            {
+                if (strikeDirection.y < -0.1f)
+                    cam.ShakePogo();
+                else
+                    cam.ShakeDash();
+            }
 
             if (strikeDirection.y < -0.1f) player.DoPogo();
 
