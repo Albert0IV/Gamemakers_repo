@@ -45,8 +45,15 @@ public class LevelController : MonoBehaviour
         gameEnded = true;
 
         victoryMenu.SetActive(true);
-        Time.timeScale = 0f;
 
+        // --- NUEVA LÓGICA: Desactivar Tutorial ---
+        if (TutorialManager.Instance != null)
+        {
+            TutorialManager.Instance.HideTutorialNow();
+        }
+        // -----------------------------------------
+
+        Time.timeScale = 0f;
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
 
@@ -55,13 +62,14 @@ public class LevelController : MonoBehaviour
         if (tm != null)
         {
             float finalTime = tm.StopTimer();
-            GetComponent<ScoreSystem>().ProcessScore(finalTime);
+            ScoreSystem ss = GetComponent<ScoreSystem>();
+            if (ss != null) ss.ProcessScore(finalTime);
         }
 
         // 2. Desbloquear siguiente nivel
         string current = SceneManager.GetActiveScene().name;
-        if (current == "Nivel_1") PlayerPrefs.SetInt("Nivel_2_Unlocked", 1);
-        if (current == "Nivel_2") PlayerPrefs.SetInt("Nivel_3_Unlocked", 1);
+        if (current.Contains("Nivel_1")) PlayerPrefs.SetInt("Nivel_2_Unlocked", 1);
+        if (current.Contains("Nivel_2")) PlayerPrefs.SetInt("Nivel_3_Unlocked", 1);
         PlayerPrefs.Save();
     }
 

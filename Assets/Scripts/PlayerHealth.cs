@@ -20,6 +20,7 @@ public class PlayerHealth : MonoBehaviour
     public PlayerController controller;
     public Rigidbody rb;
     public Renderer playerRenderer;
+    [SerializeField] private Animator animator; // <--- NUEVA REFERENCIA
 
     private bool isInvulnerable;
     private Vector3 lastSafePosition;
@@ -29,6 +30,9 @@ public class PlayerHealth : MonoBehaviour
     {
         currentLives = maxLives;
         lastSafePosition = transform.position;
+
+        // Autoreferencia por si se olvida asignar en el Inspector
+        if (animator == null) animator = GetComponent<Animator>();
     }
 
     public void SetCheckpoint(Vector3 newPos, int index)
@@ -45,6 +49,12 @@ public class PlayerHealth : MonoBehaviour
         if (isInvulnerable) return;
 
         currentLives -= damage;
+
+        // 1. DISPARAR ANIMACIÓN DE DAÑO
+        if (animator != null)
+        {
+            animator.SetTrigger("Hurt");
+        }
 
         // Sacudida de Daño
         CameraSystem cam = Camera.main.GetComponent<CameraSystem>();
@@ -66,12 +76,11 @@ public class PlayerHealth : MonoBehaviour
     {
         yield return new WaitForSeconds(timeBeforeTeleport);
 
-        // Arreglo Respawn: Forzar estado y posición
         rb.isKinematic = true;
         rb.linearVelocity = Vector3.zero;
         transform.position = lastSafePosition + (Vector3.up * respawnOffsetY);
 
-        Physics.SyncTransforms(); // Vital para que Unity registre el cambio antes del siguiente frame
+        Physics.SyncTransforms();
 
         yield return new WaitForFixedUpdate();
 
@@ -109,7 +118,11 @@ public class PlayerHealth : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Spikes")) TakeDamage(1, collision.contacts[0].point, true);
+        // Detectar pinchos por Tag o por Layer
+        if (collision.gameObject.CompareTag("Spikes"))
+        {
+            TakeDamage(1, collision.contacts[0].point, true);
+        }
     }
 
     private void RestartLevel() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);

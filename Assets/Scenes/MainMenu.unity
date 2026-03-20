@@ -780,7 +780,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   nameInput: {fileID: 594359730}
-  timeToReset: 3
+  timeToReset: 1.5
 --- !u!4 &841316483
 Transform:
   m_ObjectHideFlags: 0

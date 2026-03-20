@@ -1,17 +1,26 @@
+
 using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
 
 public class ScoreSystem : MonoBehaviour
 {
+    [Header("UI Referencias")]
     [SerializeField] private GameObject newRecordLabel;
     [SerializeField] private TextMeshProUGUI highscoreTableText;
+    [SerializeField] private TextMeshProUGUI finalTimeText; // <--- NUEVA REFERENCIA
 
     [System.Serializable]
     public class ScoreEntry { public string name; public float time; }
 
     public void ProcessScore(float finalTime)
     {
+        // Mostramos el tiempo que acaba de hacer el jugador inmediatamente
+        if (finalTimeText != null)
+        {
+            finalTimeText.text = "YOUR TIME: " + FormatTime(finalTime);
+        }
+
         string levelKey = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name + "_Best";
         List<ScoreEntry> scores = new List<ScoreEntry>();
 

@@ -5,6 +5,7 @@ public class PlayerCombat : MonoBehaviour
     [Header("Referencias")]
     [SerializeField] private PlayerController playerController;
     [SerializeField] private Transform firePoint;
+    [SerializeField] private Animator animator; // ASIGNADO EN INSPECTOR
 
     [Header("Prefabs")]
     [SerializeField] private GameObject ballPrefab;
@@ -27,50 +28,31 @@ public class PlayerCombat : MonoBehaviour
     private Rigidbody rb;
     private BallProjectile currentBall;
 
-    // Eliminamos la variable isCooldownActive que daba error y usamos throwTimer directamente
-
     public float GetThrowTimer() => throwTimer;
     public float GetMaxThrowCooldown() => throwCooldown;
     public bool HasBallInWorld() => currentBall != null;
-
-    public bool CanShoot()
-    {
-        // Solo dispara si NO hay bola en el mundo, el timer llegó a 0 y NO está en el suelo
-        return currentBall == null && throwTimer <= 0 && !playerController.CheckGrounded();
-    }
 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
         if (playerController == null) playerController = GetComponent<PlayerController>();
-        throwTimer = 0; // Empezamos con la bola lista
+        if (animator == null) animator = GetComponent<Animator>();
+        throwTimer = 0;
     }
 
     void Update()
     {
-        // El temporizador siempre intenta bajar a 0
-        if (throwTimer > 0)
-        {
-            throwTimer -= Time.deltaTime;
-        }
-
+        if (throwTimer > 0) throwTimer -= Time.deltaTime;
         if (meleeTimer > 0) meleeTimer -= Time.deltaTime;
 
-        // Si la bola se destruye (por ejemplo, cae al vacío), recuperamos el estado
-        if (currentBall != null && currentBall.gameObject == null)
-        {
-            ReturnBall();
-        }
+        if (currentBall != null && currentBall.gameObject == null) ReturnBall();
 
-        if (Input.GetButtonDown("Fire1"))
-        {
-            HandleUniversalAttack();
-        }
+        if (Input.GetButtonDown("Fire1")) HandleUniversalAttack();
     }
 
     private void HandleUniversalAttack()
     {
-        aimDirection = Vector2.down;
+        aimDirection = Vector2.down; // Siempre hacia abajo como pediste
 
         if (currentBall != null)
         {
@@ -84,25 +66,27 @@ public class PlayerCombat : MonoBehaviour
 
     private void ThrowBall()
     {
+        // --- ANIMACIÓN: Lanzar bola abajo ---
+        animator.SetTrigger("ThrowDown");
+
         DoPogo();
         GameObject ballObj = Instantiate(ballPrefab, firePoint.position, Quaternion.identity);
         currentBall = ballObj.GetComponent<BallProjectile>();
         currentBall.Initialize(aimDirection * throwForce, this);
-
-        // Al lanzar, NO activamos el timer todavía. 
-        // El HUD detectará que currentBall != null y se pondrá a 0.
         throwTimer = 0;
     }
 
     public void ReturnBall()
     {
         currentBall = null;
-        // AQUÍ es donde empieza el tiempo de espera
         throwTimer = throwCooldown;
     }
 
     private void PerformMelee()
     {
+        // --- ANIMACIÓN: Bate abajo ---
+        animator.SetTrigger("AttackDown");
+
         meleeTimer = meleeCooldown;
         Vector3 spawnPos = transform.position + (Vector3)aimDirection * meleeOffsetDistance;
         GameObject hitboxObj = Instantiate(meleeHitboxPrefab, spawnPos, Quaternion.identity);
@@ -118,5 +102,4 @@ public class PlayerCombat : MonoBehaviour
         lastPogoTime = Time.time;
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, pogoForce, 0f);
     }
-  
 }

@@ -90,4 +90,15 @@ public class TutorialManager : MonoBehaviour
         c.a = alpha;
         infoText.color = c;
     }
+    public void HideTutorialNow()
+    {
+        if (tutorialCoroutine != null) StopCoroutine(tutorialCoroutine);
+
+        if (infoText != null)
+        {
+            infoText.text = "";
+            SetTextAlpha(0);
+            infoText.gameObject.SetActive(false);
+        }
+    }
 }

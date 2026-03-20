@@ -4,17 +4,18 @@ public class CameraSystem : MonoBehaviour
 {
     [Header("Referencias")]
     [SerializeField] private Transform target;
+    private PlayerController playerController;
 
     [Header("Seguimiento")]
-    [SerializeField] private float smoothSpeed = 10f; // Aumentado para mayor respuesta
+    [SerializeField] private float smoothSpeed = 10f;
     [SerializeField] private Vector3 offset = new Vector3(0, 2, -10);
 
     [Header("Anticipación")]
     [SerializeField] private float lookAheadDistance = 4f;
     [SerializeField] private float lookAheadSpeed = 2.5f;
+    [SerializeField] private float wallSlideLookAheadMultiplier = 1.5f; // Cuánto más lejos mira en la pared
 
     [Header("Ajustes de Screen Shake")]
-    // Asegúrate de que estos valores NO sean 0 en el Inspector
     public float pogoMagnitude = 0.3f;
     public float pogoDuration = 0.1f;
     public float damageMagnitude = 0.7f;
@@ -29,7 +30,13 @@ public class CameraSystem : MonoBehaviour
     private float currentLookAheadX;
     private float lastDirectionX = 1;
 
-    // Métodos públicos
+    void Start()
+    {
+        // Intentamos obtener el componente automáticamente si el target es el jugador
+        if (target != null) playerController = target.GetComponent<PlayerController>();
+    }
+
+    // Métodos públicos para disparar el Shake desde otros scripts
     public void ShakePogo() { TriggerShake(pogoDuration, pogoMagnitude); }
     public void ShakeDamage() { TriggerShake(damageDuration, damageMagnitude); }
     public void ShakeDash() { TriggerShake(dashDuration, dashMagnitude); }
@@ -38,25 +45,39 @@ public class CameraSystem : MonoBehaviour
     {
         shakeTimeRemaining = duration;
         currentShakeMagnitude = magnitude;
-        Debug.Log("SHAKE DISPARADO: Mag " + magnitude + " Dur " + duration);
     }
 
     void LateUpdate()
     {
         if (target == null) return;
 
-        // 1. Lógica de Seguimiento Horizontal
+        // 1. DETERMINAR DIRECCIÓN Y DISTANCIA DE ENFOQUE (Look Ahead)
         float moveInputX = Input.GetAxisRaw("Horizontal");
-        if (moveInputX != 0) lastDirectionX = moveInputX > 0 ? 1 : -1;
+        float finalLookAheadDistance = lookAheadDistance;
 
-        currentLookAheadX = Mathf.Lerp(currentLookAheadX, lastDirectionX * lookAheadDistance, Time.deltaTime * lookAheadSpeed);
+        // EXCEPCIÓN DE WALLSLIDE:
+        if (playerController != null && playerController.IsWallSliding())
+        {
+            // Forzamos la dirección hacia donde mira el personaje (hacia afuera de la pared)
+            lastDirectionX = playerController.IsFacingRight() ? 1 : -1;
 
-        // 2. Lógica de Shake (Cálculo del Offset)
+            // Aplicamos el multiplicador para ver más lejos en situaciones de pared
+            finalLookAheadDistance *= wallSlideLookAheadMultiplier;
+        }
+        else if (moveInputX != 0)
+        {
+            // Comportamiento normal por input
+            lastDirectionX = moveInputX > 0 ? 1 : -1;
+        }
+
+        // Suavizamos el desplazamiento horizontal (Interpolar hacia el objetivo)
+        float targetLookAhead = lastDirectionX * finalLookAheadDistance;
+        currentLookAheadX = Mathf.Lerp(currentLookAheadX, targetLookAhead, Time.deltaTime * lookAheadSpeed);
+
+        // 2. Lógica de Screen Shake
         if (shakeTimeRemaining > 0)
         {
             shakeTimeRemaining -= Time.deltaTime;
-
-            // Usamos InsideUnitCircle para que solo afecte a X e Y (2D) y no a la profundidad Z
             Vector2 randomPoint = Random.insideUnitCircle * currentShakeMagnitude;
             currentShakeOffset = new Vector3(randomPoint.x, randomPoint.y, 0);
         }
@@ -65,18 +86,17 @@ public class CameraSystem : MonoBehaviour
             currentShakeOffset = Vector3.zero;
         }
 
-        // 3. Aplicación Final
-        // Calculamos a dónde debería ir la cámara
+        // 3. CÁLCULO DE POSICIÓN FINAL
         Vector3 desiredPos = target.position + offset;
         desiredPos.x += currentLookAheadX;
 
-        // Suavizamos el movimiento hacia esa posición
+        // Suavizamos el movimiento de la cámara hacia la posición deseada
         Vector3 smoothedPos = Vector3.Lerp(transform.position, desiredPos, smoothSpeed * Time.deltaTime);
 
-        // IMPORTANTE: Sumamos el shake DESPUÉS del Lerp para que el suavizado no lo anule
+        // Aplicamos la posición + el efecto de sacudida
         transform.position = smoothedPos + currentShakeOffset;
 
-        // Bloqueamos la rotación para que no baile
+        // Bloqueamos rotación
         transform.rotation = Quaternion.identity;
     }
 }
