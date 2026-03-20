@@ -4,7 +4,7 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     [Header("Debug Estado")]
-    public bool canMove = true;
+    public bool canMove = true; // para bloquear el control cuando nos morimos con los pinchos 
 
     [Header("Movimiento")]
     [SerializeField] private float speed = 8f;
@@ -15,17 +15,17 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private bool useJumpVelocity = false;
     [SerializeField] private float jumpHeight = 4f;
     [SerializeField] private float jumpVelocity = 12f;
-    [SerializeField] private float jumpCutMultiplier = 0.3f;
-    [SerializeField] private float jumpBufferTime = 0.2f;
+    [SerializeField] private float jumpCutMultiplier = 0.3f; // esto frena el salto si soltamos el espacio rapido
+    [SerializeField] private float jumpBufferTime = 0.2f; // guarda el salto si pulsas un pelin antes de caer
     private float jumpBufferTimer = 0f;
 
     [Header("Caida & Gravedad")]
     [SerializeField] private float maxFallSpeed = -20f;
     [SerializeField] private float gravityNormal = 3f;
-    [SerializeField] private float fallMultiplier = 2f;
+    [SerializeField] private float fallMultiplier = 2f; // cae mas rapido de lo que sube para que se sienta mejor
 
     [Header("Coyote Time")]
-    [SerializeField] private float coyoteTime = 0.1f;
+    [SerializeField] private float coyoteTime = 0.1f; // tiempo extra para saltar aunque ya no pises suelo
     private float coyoteTimer;
 
     [Header("Dash")]
@@ -56,15 +56,15 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
 
     private float groundCheckDistance = 0.05f;
-    private float wallCheckDistance = 0.1f; // Un poco más de margen para el flip
+    private float wallCheckDistance = 0.1f;
 
-    // Getters para otros scripts (Combat/HUD)
     public float GetDashCooldownTimer() => dashCooldownTimer;
     public float GetMaxDashCooldown() => dashCooldown;
     public bool IsDashing() => isDashing;
 
     private void Start()
     {
+        // buscamos los componentes al arrancar por si se nos olvido arrastrarlos
         if (playerCollider == null) playerCollider = GetComponent<Collider>();
         if (rb == null) rb = GetComponent<Rigidbody>();
         if (animator == null) animator = GetComponent<Animator>();
@@ -78,8 +78,9 @@ public class PlayerController : MonoBehaviour
 
         bool isGroundedNow = CheckGrounded();
 
-        // --- Lógica de Aterrizaje y Coyote Time ---
         animator.SetBool("Grounded", isGroundedNow);
+
+        // esto es para las particulas cuando caemos al suelo despues de un salto
         if (isGroundedNow && !wasGrounded && rb.linearVelocity.y < -1f)
         {
             if (landingParticles != null) landingParticles.Play();
@@ -87,16 +88,16 @@ public class PlayerController : MonoBehaviour
         }
         wasGrounded = isGroundedNow;
 
+        // el cronometro del coyote time (si tocas suelo se resetea)
         if (isGroundedNow) coyoteTimer = coyoteTime;
         else coyoteTimer -= Time.deltaTime;
 
-        // --- Lógica de Pared con Auto-Flip ---
         isTouchingWall = CheckWall();
         bool wasWallSliding = isWallSliding;
         isWallSliding = isTouchingWall && !isGroundedNow && rb.linearVelocity.y < 0.1f;
         animator.SetBool("IsWallSliding", isWallSliding);
 
-        // Si empieza a deslizar, giramos para mirar hacia afuera
+        // si nos pegamos a la pared, giramos para mirar hacia afuera automaticamente
         if (isWallSliding && !wasWallSliding)
         {
             PerformFlip();
@@ -111,13 +112,13 @@ public class PlayerController : MonoBehaviour
 
         horizontal = Input.GetAxisRaw("Horizontal");
 
-        // --- Jump Buffer & Dash Input ---
+        // si pulsas salto, el buffer se activa para que el juego "recuerde" que quieres saltar
         if (Input.GetButtonDown("Jump")) jumpBufferTimer = jumpBufferTime;
 
         if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f && !isDashing)
             StartCoroutine(Dash());
 
-        // Salto corto (Variable Jump Height)
+        // esto hace que el salto sea mas alto si dejas pulsado el boton (variable jump height)
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier, 0f);
 
@@ -135,38 +136,36 @@ public class PlayerController : MonoBehaviour
     {
         if (isDashing) return;
 
-        // Gravedad personalizada
+        // aqui aplicamos la gravedad personalizada segun si estamos cayendo o subiendo
         if (!CheckGrounded() && !isWallSliding)
         {
             float targetGravity = gravityNormal;
-            if (rb.linearVelocity.y < 0) targetGravity *= fallMultiplier;
+            if (rb.linearVelocity.y < 0) targetGravity *= fallMultiplier; // cae mas rapido
             Vector3 extraGravityForce = Physics.gravity * (targetGravity - 1f);
             rb.AddForce(extraGravityForce, ForceMode.Acceleration);
         }
 
         if (!canMove) return;
 
-        // --- Procesar Salto (Buffer + Coyote/Wall) ---
+        // aqui se decide si el salto es normal, con coyote time o en la pared
         if (jumpBufferTimer > 0f)
         {
             bool performedAction = false;
 
-            // Wall Jump
+            // logica para saltar desde una pared
             if (enableWallJump && isTouchingWall && !CheckGrounded())
             {
                 animator.SetTrigger("Jump");
                 isWallJumping = true;
                 Invoke(nameof(StopWallJump), wallJumpDuration);
 
-                // Salta en dirección opuesta a la que mira (porque mira hacia afuera de la pared)
                 float jumpDirection = isFacingRight ? 1f : -1f;
                 rb.linearVelocity = new Vector3(wallJumpForce.x * jumpDirection, wallJumpForce.y, 0f);
 
-                // Al saltar de la pared, nos aseguramos de mirar hacia donde saltamos
                 CheckFlipImmediate(jumpDirection);
                 performedAction = true;
             }
-            // Salto Normal / Coyote
+            // salto normal aprovechando el coyote timer
             else if (coyoteTimer > 0f)
             {
                 animator.SetTrigger("Jump");
@@ -179,21 +178,15 @@ public class PlayerController : MonoBehaviour
             else jumpBufferTimer -= Time.fixedDeltaTime;
         }
 
-        // --- Movimiento Horizontal ---
+        // movimiento horizontal normal (siempre que no estemos saltando desde la pared)
         if (!isWallJumping)
         {
             float targetVelocityX = horizontal * speed;
-
-            // Fricción en pared
-            if (isWallSliding)
-            {
-                // Si intentamos movernos hacia la pared, reducimos velocidad X a casi 0
-                targetVelocityX = 0f;
-            }
+            if (isWallSliding) targetVelocityX = 0f; // no te mueves hacia los lados si resbalas
             rb.linearVelocity = new Vector3(targetVelocityX, rb.linearVelocity.y, 0f);
         }
 
-        // --- Velocidad de caída (Wall Slide vs Normal) ---
+        // frenamos la caida si estamos resbalando por una pared
         if (isWallSliding && !isWallJumping)
         {
             if (rb.linearVelocity.y < -wallSlideSpeed)
@@ -201,6 +194,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
+            // limitamos la velocidad maxima de caida para que no sea infinito
             float clampedY = Mathf.Clamp(rb.linearVelocity.y, maxFallSpeed, float.MaxValue);
             rb.linearVelocity = new Vector3(rb.linearVelocity.x, clampedY, 0f);
         }
@@ -208,12 +202,13 @@ public class PlayerController : MonoBehaviour
 
     void LateUpdate()
     {
-        // Forzar eje Z a 0 para evitar que el personaje se desvíe en 3D
+        // esto es clave para que el personaje no se escape hacia el fondo o adelante en el eje z
         transform.position = new Vector3(transform.position.x, transform.position.y, 0f);
     }
 
     public bool CheckGrounded()
     {
+        // usamos una caja invisible (boxcast) debajo de los pies para detectar el suelo
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
         return Physics.BoxCast(center, new Vector3(size.x * 0.9f, 0.05f, size.z) / 2, Vector3.down, Quaternion.identity, (size.y / 2) + groundCheckDistance, groundLayer);
@@ -221,21 +216,18 @@ public class PlayerController : MonoBehaviour
 
     private bool CheckWall()
     {
+        // lanzamos cajas a los lados para saber si hay una pared cerca
         Vector3 center = playerCollider.bounds.center;
         Vector3 size = playerCollider.bounds.size;
-
-        // Raycast a ambos lados para que el Flip no rompa la detección
         bool hitRight = Physics.BoxCast(center, new Vector3(0.05f, size.y * 0.8f, size.z) / 2, Vector3.right, Quaternion.identity, (size.x / 2) + wallCheckDistance, groundLayer);
         bool hitLeft = Physics.BoxCast(center, new Vector3(0.05f, size.y * 0.8f, size.z) / 2, Vector3.left, Quaternion.identity, (size.x / 2) + wallCheckDistance, groundLayer);
-
         return hitRight || hitLeft;
     }
 
     private void Flip()
     {
-        // No girar por input si estamos en la pared (el auto-flip lo maneja) o haciendo walljump
+        // gira el dibujo del personaje segun hacia donde caminas
         if (isWallJumping || isWallSliding) return;
-
         if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f)
             PerformFlip();
     }
@@ -250,7 +242,7 @@ public class PlayerController : MonoBehaviour
     {
         isFacingRight = !isFacingRight;
         Vector3 localScale = transform.localScale;
-        localScale.x *= -1f;
+        localScale.x *= -1f; // esto da la vuelta al sprite
         transform.localScale = localScale;
     }
 
@@ -258,14 +250,14 @@ public class PlayerController : MonoBehaviour
     {
         isDashing = true;
         animator.SetBool("IsDashing", true);
-        rb.useGravity = false;
+        rb.useGravity = false; // quitamos gravedad para que el dash sea totalmente recto
 
         if (dashParticles != null) dashParticles.Play();
 
         CameraSystem cam = Camera.main.GetComponent<CameraSystem>();
         if (cam != null) cam.ShakeDash();
 
-        // Dirección del dash (si no hay input, dash hacia donde mira)
+        // miramos hacia donde pulsas para hacer el dash, si no pulsas nada, hacia donde miras
         Vector3 dashDirection = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, 0f).normalized;
         if (dashDirection == Vector3.zero) dashDirection = isFacingRight ? Vector3.right : Vector3.left;
 
@@ -279,7 +271,7 @@ public class PlayerController : MonoBehaviour
         isDashing = false;
         animator.SetBool("IsDashing", false);
         dashCooldownTimer = dashCooldown;
-        rb.linearVelocity = Vector3.zero; // Frenazo al terminar el dash
+        rb.linearVelocity = Vector3.zero; // frenazo en seco al terminar el impulso
     }
 
     private void StopWallJump() => isWallJumping = false;
